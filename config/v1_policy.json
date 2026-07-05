@@ -1,0 +1,99 @@
+{
+  "capital": {
+    "initial_account_equity": 50000.0,
+    "initial_live_capital_min": 10000.0,
+    "initial_live_capital_max": 15000.0
+  },
+  "benchmark": {
+    "primary": "50% SPY / 50% QQQ",
+    "weights": {
+      "SPY": 0.5,
+      "QQQ": 0.5
+    }
+  },
+  "broker": {
+    "name": "Schwab",
+    "live_trading_enabled": false,
+    "manual_approval_required": true,
+    "regular_session_only_v1": true
+  },
+  "asset_policy": {
+    "allowed_asset_types": ["etf", "equity"],
+    "long_only": true,
+    "allow_margin": false,
+    "allow_shorting": false,
+    "allow_options": false,
+    "allow_leveraged_etfs": false,
+    "allow_inverse_etfs": false,
+    "blocked_symbols": [
+      "TQQQ",
+      "SQQQ",
+      "UPRO",
+      "SPXU",
+      "SSO",
+      "SDS",
+      "QLD",
+      "QID",
+      "SOXL",
+      "SOXS",
+      "FNGU",
+      "FNGD",
+      "LABU",
+      "LABD",
+      "TECL",
+      "TECS",
+      "UVXY",
+      "SVIX"
+    ]
+  },
+  "sleeves": {
+    "core_etf": {
+      "description": "ETF-only sleeve; first live candidate after validation.",
+      "initial_status": "paper_then_limited_live",
+      "target_live_allocation_pct": 0.7
+    },
+    "equity_satellite": {
+      "description": "Individual-equity sleeve; research and paper-trade first.",
+      "initial_status": "research_and_paper_only",
+      "target_live_allocation_pct": 0.3
+    }
+  },
+  "risk_limits": {
+    "drawdown_pause_pct": 0.05,
+    "drawdown_hard_stop_pct": 0.08,
+    "day_stop_new_trades_pct": 0.005,
+    "day_hard_review_pct": 0.01,
+    "week_pause_pct": 0.015,
+    "month_pause_pct": 0.03,
+    "risk_per_trade_default_pct": 0.0025,
+    "risk_per_trade_max_pct": 0.005,
+    "gross_exposure_cap_pct": 0.8,
+    "single_stock_cap_pct": 0.05,
+    "single_etf_cap_pct": 0.10,
+    "minimum_cash_buffer_pct": 0.20
+  },
+  "earnings_policy": {
+    "pre_earnings_blackout_trading_days": 2,
+    "post_earnings_blackout_trading_days": 1,
+    "manual_override_allowed": true,
+    "validated_event_model_allowed": true,
+    "max_size_multiplier_during_blackout": 0.5,
+    "max_total_pre_earnings_exposure_pct": 0.05
+  },
+  "promotion_gate": {
+    "minimum_backtest_years": 2,
+    "preferred_daily_backtest_years": 10,
+    "paper_trading_market_days_min": 30,
+    "paper_trading_market_days_preferred": 60,
+    "must_compare_to_primary_benchmark": true,
+    "must_include_costs_and_slippage": true,
+    "must_pass_out_of_sample_review": true
+  },
+  "reporting": {
+    "daily_email": true,
+    "critical_sms": true,
+    "dashboard_notifications": true,
+    "slack": false
+  }
+}
+
