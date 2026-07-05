@@ -1,14 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Download,
-  Play,
-  RefreshCcw,
-  ShieldCheck
-} from "lucide-react";
+import { AlertTriangle, Download, RefreshCcw } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -37,26 +30,30 @@ import {
 } from "@/lib/format";
 import type {
   DashboardResponse,
+  DailyReturnRow,
   PolicyResponse,
   StrategyDetail,
   StrategySummary,
   TimeSeriesPoint,
-  TradeRow
+  TradeRow,
+  WeightRow
 } from "@/types/api";
 
-const COLORS = ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed", "#0891b2"];
-const formatChartDate = (label: unknown) => compactDate(String(label));
+const COLORS = ["#ff4b4b", "#1f77b4", "#2ca02c", "#ff7f0e", "#9467bd", "#17becf"];
+const DEFAULT_ETFS = ["SPY", "QQQ", "IWM", "TLT", "IEF", "GLD"];
+const DEFAULT_STOCKS = ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "JPM", "XOM", "UNH", "COST"];
 const TABS = [
   { id: "overview", label: "Overview" },
-  { id: "strategy", label: "Strategy" },
+  { id: "strategy", label: "Strategy Detail" },
   { id: "trades", label: "Trades" },
+  { id: "universe", label: "Universe" },
   { id: "policy", label: "Policy" }
 ] as const;
 type DashboardTab = (typeof TABS)[number]["id"];
 
-function chartRows(series: Record<string, TimeSeriesPoint[]>, strategyNames: string[]) {
+function chartRows(series: Record<string, TimeSeriesPoint[]>, names: string[]) {
   const byDate = new Map<string, Record<string, string | number>>();
-  strategyNames.forEach((name) => {
+  names.forEach((name) => {
     (series[name] || []).forEach((point) => {
       const row = byDate.get(point.date) || { date: point.date };
       row[name] = point.value;
@@ -99,7 +96,7 @@ function downloadTrades(strategyName: string, rows: TradeRow[]) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `${strategyName.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}-trades.csv`;
+  anchor.download = `${strategyName.toLowerCase().replaceAll(/[^a-z0-9]+/g, "_")}_trades.csv`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
@@ -112,16 +109,27 @@ function selectedBenchmark(summary: StrategySummary[]) {
   return summary.find((row) => row.name === "50/50 SPY/QQQ") || summary[0];
 }
 
+function defaultStrategyId(summary: StrategySummary[]) {
+  return summary.find((row) => row.name === "70/30 Combined Policy")?.id || summary[0]?.id || "";
+}
+
+function hasStrategy(summary: StrategySummary[], strategyId: string) {
+  return summary.some((strategy) => strategy.id === strategyId);
+}
+
 export function TradingDashboard() {
   const [initialCapital, setInitialCapital] = useState(50000);
   const [useRealData, setUseRealData] = useState(true);
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [policy, setPolicy] = useState<PolicyResponse | null>(null);
   const [selectedStrategyId, setSelectedStrategyId] = useState<string>("");
-  const [detail, setDetail] = useState<StrategyDetail | null>(null);
+  const [selectedTradeStrategyId, setSelectedTradeStrategyId] = useState<string>("");
+  const [strategyDetail, setStrategyDetail] = useState<StrategyDetail | null>(null);
+  const [tradeDetail, setTradeDetail] = useState<StrategyDetail | null>(null);
   const [selectedActions, setSelectedActions] = useState<string[]>([]);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [loadingStrategy, setLoadingStrategy] = useState(false);
+  const [loadingTrades, setLoadingTrades] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
@@ -136,18 +144,18 @@ export function TradingDashboard() {
       ]);
       setPolicy(policyPayload);
       setDashboard(dashboardPayload);
-      if (
-        dashboardPayload.summary.length > 0 &&
-        !dashboardPayload.summary.some((strategy) => strategy.id === selectedStrategyId)
-      ) {
-        setSelectedStrategyId(dashboardPayload.summary[0].id);
-      }
+      setSelectedStrategyId((current) =>
+        hasStrategy(dashboardPayload.summary, current) ? current : defaultStrategyId(dashboardPayload.summary)
+      );
+      setSelectedTradeStrategyId((current) =>
+        hasStrategy(dashboardPayload.summary, current) ? current : defaultStrategyId(dashboardPayload.summary)
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load dashboard.");
     } finally {
       setLoadingDashboard(false);
     }
-  }, [initialCapital, selectedStrategyId, useRealData]);
+  }, [initialCapital, useRealData]);
 
   useEffect(() => {
     void loadDashboard();
@@ -157,18 +165,32 @@ export function TradingDashboard() {
     if (!selectedStrategyId) {
       return;
     }
-    setLoadingDetail(true);
+    setLoadingStrategy(true);
     setError(null);
     fetchStrategyDetail(selectedStrategyId, initialCapital, useRealData)
-      .then((payload) => {
-        setDetail(payload);
-        setSelectedActions(Array.from(new Set(payload.trade_history.map((row) => row.action))));
-      })
+      .then(setStrategyDetail)
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Unable to load strategy.");
       })
-      .finally(() => setLoadingDetail(false));
+      .finally(() => setLoadingStrategy(false));
   }, [initialCapital, selectedStrategyId, useRealData]);
+
+  useEffect(() => {
+    if (!selectedTradeStrategyId) {
+      return;
+    }
+    setLoadingTrades(true);
+    setError(null);
+    fetchStrategyDetail(selectedTradeStrategyId, initialCapital, useRealData)
+      .then((payload) => {
+        setTradeDetail(payload);
+        setSelectedActions(Array.from(new Set(payload.trade_history.map((row) => row.action))).sort());
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Unable to load trades.");
+      })
+      .finally(() => setLoadingTrades(false));
+  }, [initialCapital, selectedTradeStrategyId, useRealData]);
 
   const strategyNames = useMemo(
     () => dashboard?.summary.map((row) => row.name) || [],
@@ -182,19 +204,36 @@ export function TradingDashboard() {
     () => (dashboard ? chartRows(dashboard.drawdowns, strategyNames) : []),
     [dashboard, strategyNames]
   );
-  const filteredTrades = useMemo(() => {
-    if (!detail) {
-      return [];
-    }
-    return detail.trade_history.filter((row) => selectedActions.includes(row.action));
-  }, [detail, selectedActions]);
+  const etfSymbols = dashboard?.sample_etfs || DEFAULT_ETFS;
+  const stockSymbols = dashboard?.sample_stocks || DEFAULT_STOCKS;
+  const etfPriceRows = useMemo(
+    () => chartRows(dashboard?.prices || {}, etfSymbols),
+    [dashboard, etfSymbols]
+  );
+  const stockPriceRows = useMemo(
+    () => chartRows(dashboard?.prices || {}, stockSymbols),
+    [dashboard, stockSymbols]
+  );
   const recentReturns = useMemo(
-    () => detail?.daily_returns.slice(-126) || [],
-    [detail]
+    () => strategyDetail?.daily_returns.slice(-126) || [],
+    [strategyDetail]
+  );
+  const tradeRows = tradeDetail?.trade_history || [];
+  const filteredTrades = useMemo(
+    () => tradeRows.filter((row) => selectedActions.includes(row.action)),
+    [selectedActions, tradeRows]
   );
   const actionOptions = useMemo(
-    () => Array.from(new Set(detail?.trade_history.map((row) => row.action) || [])),
-    [detail]
+    () => Array.from(new Set(tradeRows.map((row) => row.action))).sort(),
+    [tradeRows]
+  );
+  const rebalanceEvents = useMemo(
+    () => new Set(tradeRows.map((row) => row.trade_date)).size,
+    [tradeRows]
+  );
+  const openMarks = useMemo(
+    () => tradeRows.filter((row) => row.action === "Mark").length,
+    [tradeRows]
   );
 
   async function handleRefreshYahoo() {
@@ -204,6 +243,12 @@ export function TradingDashboard() {
       const payload = await refreshYahooData(initialCapital);
       setDashboard(payload.dashboard);
       setUseRealData(true);
+      setSelectedStrategyId((current) =>
+        hasStrategy(payload.dashboard.summary, current) ? current : defaultStrategyId(payload.dashboard.summary)
+      );
+      setSelectedTradeStrategyId((current) =>
+        hasStrategy(payload.dashboard.summary, current) ? current : defaultStrategyId(payload.dashboard.summary)
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to refresh Yahoo data.");
     } finally {
@@ -214,196 +259,134 @@ export function TradingDashboard() {
   const best = dashboard ? bestStrategy(dashboard.summary) : null;
   const benchmark = dashboard ? selectedBenchmark(dashboard.summary) : null;
   const combined = dashboard?.summary.find((row) => row.name === "70/30 Combined Policy") || null;
+  const policyJson = policy
+    ? {
+        benchmark: policy.benchmark_weights,
+        live_trading_enabled: policy.live_trading_enabled,
+        manual_approval_required: policy.manual_approval_required,
+        long_only: policy.long_only,
+        allow_margin: policy.allow_margin,
+        allow_shorting: policy.allow_shorting,
+        gross_exposure_cap_pct: policy.gross_exposure_cap_pct,
+        risk_per_trade_default_pct: policy.risk_per_trade_default_pct,
+        risk_per_trade_max_pct: policy.risk_per_trade_max_pct
+      }
+    : null;
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="title-group">
-          <span className="eyebrow">Research dashboard</span>
-          <h1>Trading Agent</h1>
-          <p className="subtitle">
-            Compare strategy sleeves, inspect drawdowns, and audit simulated rebalance trades.
-          </p>
-          <div className="meta-row">
-            <span>{dashboard?.is_real_data ? "Real historical data" : "Synthetic validation data"}</span>
-            <span>{dashboard?.data_source || "Loading data source"}</span>
-          </div>
-        </div>
-        <div className="controls">
-          <label className="field">
-            <span>Initial capital</span>
-            <input
-              type="number"
-              min="1000"
-              step="1000"
-              value={initialCapital}
-              onChange={(event) => setInitialCapital(Number(event.target.value))}
-            />
-          </label>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={useRealData}
-              onChange={(event) => setUseRealData(event.target.checked)}
-            />
-            <span>Real data</span>
-          </label>
-          <button className="button secondary" type="button" onClick={() => void loadDashboard()}>
-            <Play size={16} />
-            Run
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            onClick={() => void handleRefreshYahoo()}
-            disabled={refreshing}
-          >
-            <RefreshCcw size={16} />
-            {refreshing ? "Refreshing" : "Refresh Yahoo"}
-          </button>
-        </div>
-      </header>
-
-      {error ? (
-        <div className="alert">
-          <AlertTriangle size={18} />
-          <span>{error}</span>
-        </div>
-      ) : null}
-
-      <section className="metric-strip">
-        <Metric label="Best strategy" value={best?.name || "-"} delta={best ? formatPercent(best.total_return) : ""} />
-        <Metric label="Combined policy" value={combined ? formatCurrency(combined.ending_value) : "-"} delta={combined ? formatPercent(combined.total_return) : ""} />
-        <Metric label="Benchmark" value={benchmark ? formatCurrency(benchmark.ending_value) : "-"} delta={benchmark ? formatPercent(benchmark.total_return) : ""} />
-        <Metric label="Policy status" value={policy?.live_trading_enabled ? "Live enabled" : "Live disabled"} delta={policy?.manual_approval_required ? "Manual approval" : ""} />
-      </section>
-
-      <nav className="tabs" aria-label="Dashboard sections">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            className={activeTab === tab.id ? "tab active" : "tab"}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
-
-      {activeTab === "overview" ? (
-        <>
-          <section className="grid grid-two">
-            <Panel title="Equity Curve" description="Portfolio value by strategy over the full demo window.">
-              <ChartFrame loading={loadingDashboard}>
-                <ResponsiveContainer width="100%" height={360}>
-                  <LineChart data={equityRows} margin={{ top: 8, right: 18, left: 4, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-                    <XAxis dataKey="date" tickFormatter={compactDate} minTickGap={42} tickLine={false} axisLine={false} />
-                    <YAxis tickFormatter={(value) => `$${Math.round(Number(value) / 1000)}k`} tickLine={false} axisLine={false} width={64} />
-                    <Tooltip formatter={(value) => formatCurrency(Number(value))} labelFormatter={formatChartDate} />
-                    <Legend wrapperStyle={{ paddingTop: 12 }} />
-                    {strategyNames.map((name, index) => (
-                      <Line key={name} type="monotone" dataKey={name} dot={false} stroke={COLORS[index % COLORS.length]} strokeWidth={2.4} />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartFrame>
-            </Panel>
-
-            <Panel title="Drawdown" description="Peak-to-trough decline for each strategy path.">
-              <ChartFrame loading={loadingDashboard}>
-                <ResponsiveContainer width="100%" height={360}>
-                  <LineChart data={drawdownRows} margin={{ top: 8, right: 18, left: 4, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-                    <XAxis dataKey="date" tickFormatter={compactDate} minTickGap={42} tickLine={false} axisLine={false} />
-                    <YAxis tickFormatter={(value) => formatPercent(Number(value), 0)} tickLine={false} axisLine={false} width={54} />
-                    <Tooltip formatter={(value) => formatPercent(Number(value))} labelFormatter={formatChartDate} />
-                    <Legend wrapperStyle={{ paddingTop: 12 }} />
-                    {strategyNames.map((name, index) => (
-                      <Line key={name} type="monotone" dataKey={name} dot={false} stroke={COLORS[index % COLORS.length]} strokeWidth={2.4} />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartFrame>
-            </Panel>
-          </section>
-
-          <Panel title="Strategy Summary" description="Click a row to inspect weights, returns, and trades.">
-            <StrategySummaryTable
-              rows={dashboard?.summary || []}
-              selectedStrategyId={selectedStrategyId}
-              onSelect={(strategyId) => {
-                setSelectedStrategyId(strategyId);
-                setActiveTab("strategy");
-              }}
-            />
-          </Panel>
-        </>
-      ) : null}
-
-      {activeTab === "strategy" ? (
-        <section className="grid grid-two">
-          <Panel title={detail ? detail.summary.name : "Strategy Detail"} description={detail?.description}>
-            {loadingDetail || !detail ? (
-              <div className="loading">Loading strategy</div>
-            ) : (
-              <div className="detail-stack">
-                <div className="detail-metrics">
-                  <Metric label="Ending value" value={formatCurrency(detail.summary.ending_value)} delta="" />
-                  <Metric label="Total return" value={formatPercent(detail.summary.total_return)} delta="" />
-                  <Metric label="Max drawdown" value={formatPercent(detail.summary.max_drawdown)} delta="" />
-                  <Metric label="Sharpe-like" value={formatNumber(detail.summary.sharpe_like)} delta="" />
-                </div>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={detail.latest_weights} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-                    <XAxis dataKey="symbol" tickLine={false} axisLine={false} />
-                    <YAxis tickFormatter={(value) => formatPercent(Number(value), 0)} tickLine={false} axisLine={false} />
-                    <Tooltip formatter={(value) => formatPercent(Number(value))} />
-                    <Bar dataKey="weight" fill="#2563eb" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </Panel>
-
-          <Panel title="Recent Daily Returns" description="Most recent 126 trading days for the selected strategy.">
-            <ChartFrame loading={loadingDetail}>
-              <ResponsiveContainer width="100%" height={390}>
-                <BarChart data={recentReturns} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-                  <XAxis dataKey="date" tickFormatter={compactDate} minTickGap={24} tickLine={false} axisLine={false} />
-                  <YAxis tickFormatter={(value) => formatPercent(Number(value), 0)} tickLine={false} axisLine={false} />
-                  <Tooltip formatter={(value) => formatPercent(Number(value), 2)} labelFormatter={formatChartDate} />
-                  <Bar dataKey="daily_return" fill="#0f766e" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartFrame>
-          </Panel>
-        </section>
-      ) : null}
-
-      {activeTab === "trades" ? (
-        <Panel
-          title="Trades"
-          description="Simulated rebalance rows generated from target weight changes."
-          action={
-            detail ? (
-              <button className="button secondary" type="button" onClick={() => downloadTrades(detail.summary.name, filteredTrades)}>
-                <Download size={16} />
-                Export CSV
-              </button>
-            ) : null
-          }
+    <div className="streamlit-shell">
+      <aside className="sidebar">
+        <label className="st-field">
+          <span>Initial capital</span>
+          <input
+            type="number"
+            min="1000"
+            max="1000000"
+            step="1000"
+            value={initialCapital}
+            onChange={(event) => setInitialCapital(Number(event.target.value))}
+          />
+        </label>
+        <label className="st-checkbox">
+          <input
+            type="checkbox"
+            checked={useRealData}
+            onChange={(event) => setUseRealData(event.target.checked)}
+          />
+          <span>Use real historical data</span>
+        </label>
+        <button
+          className="st-button"
+          type="button"
+          onClick={() => void handleRefreshYahoo()}
+          disabled={!useRealData || refreshing}
         >
-          <div className="trade-toolbar">
-            <label className="select-field">
+          <RefreshCcw size={15} />
+          {refreshing ? "Refreshing Yahoo data" : "Refresh Yahoo data"}
+        </button>
+        <p className="sidebar-caption">Yahoo cache: var/market_data/yahoo_close_prices.csv</p>
+      </aside>
+
+      <main className="main">
+        <h1>Trading Agent</h1>
+
+        {dashboard?.is_real_data ? (
+          <p className="caption">Using real historical adjusted-close data: {dashboard.data_source}</p>
+        ) : (
+          <div className="warning">
+            <AlertTriangle size={18} />
+            <div>
+              <strong>Using deterministic synthetic fallback data.</strong>
+              <span>Real-data download failed or was disabled.</span>
+              {dashboard?.data_error ? <small>{dashboard.data_error}</small> : null}
+            </div>
+          </div>
+        )}
+
+        {error ? (
+          <div className="warning error">
+            <AlertTriangle size={18} />
+            <div>
+              <strong>Unable to reach the trading API.</strong>
+              <span>{error}</span>
+            </div>
+          </div>
+        ) : null}
+
+        <section className="metric-row four">
+          <Metric label="Best demo strategy" value={best?.name || "-"} delta={best ? formatPercent(best.total_return) : ""} />
+          <Metric label="Combined policy" value={combined ? formatCurrency(combined.ending_value) : "-"} delta={combined ? formatPercent(combined.total_return) : ""} />
+          <Metric label="50/50 benchmark" value={benchmark ? formatCurrency(benchmark.ending_value) : "-"} delta={benchmark ? formatPercent(benchmark.total_return) : ""} />
+          <Metric label="Data mode" value={dashboard?.is_real_data ? "Real" : "Synthetic"} delta="Live trading disabled" />
+        </section>
+
+        <nav className="st-tabs" aria-label="Dashboard sections">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={activeTab === tab.id ? "st-tab active" : "st-tab"}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        {activeTab === "overview" ? (
+          <>
+            <Section title="Demo Backtest Summary">
+              <StrategySummaryTable
+                rows={dashboard?.summary || []}
+                selectedStrategyId={selectedStrategyId}
+                onSelect={(strategyId) => {
+                  setSelectedStrategyId(strategyId);
+                  setActiveTab("strategy");
+                }}
+              />
+            </Section>
+
+            <Section title="Equity Curve">
+              <ChartFrame loading={loadingDashboard}>
+                <SeriesLineChart rows={equityRows} names={strategyNames} valueKind="currency" height={390} />
+              </ChartFrame>
+            </Section>
+
+            <Section title="Drawdown">
+              <ChartFrame loading={loadingDashboard}>
+                <SeriesLineChart rows={drawdownRows} names={strategyNames} valueKind="percent" height={360} />
+              </ChartFrame>
+            </Section>
+          </>
+        ) : null}
+
+        {activeTab === "strategy" ? (
+          <>
+            <label className="st-select">
               <span>Strategy</span>
               <select
                 value={selectedStrategyId}
                 onChange={(event) => setSelectedStrategyId(event.target.value)}
-                aria-label="Trade strategy"
               >
                 {dashboard?.summary.map((strategy) => (
                   <option key={strategy.id} value={strategy.id}>
@@ -412,104 +395,149 @@ export function TradingDashboard() {
                 ))}
               </select>
             </label>
-            <span className="trade-count">{filteredTrades.length} rows</span>
-            <div className="action-filter">
-              {actionOptions.map((action) => (
-                <label key={action}>
-                  <input
-                    type="checkbox"
-                    checked={selectedActions.includes(action)}
-                    onChange={(event) => {
-                      setSelectedActions((current) =>
-                        event.target.checked
-                          ? [...current, action]
-                          : current.filter((item) => item !== action)
-                      );
-                    }}
-                  />
-                  <span>{action}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="table-scroll trades-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Trade date</th>
-                  <th>Entry</th>
-                  <th>Exit/trim</th>
-                  <th>Symbol</th>
-                  <th>Action</th>
-                  <th>Source</th>
-                  <th>Prev.</th>
-                  <th>Target</th>
-                  <th>Change</th>
-                  <th>Price</th>
-                  <th>Cost drag</th>
-                  <th>Return</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTrades.map((row, index) => (
-                  <tr key={`${row.trade_date}-${row.symbol}-${row.action}-${index}`}>
-                    <td>{row.trade_date}</td>
-                    <td>{row.entry_date || ""}</td>
-                    <td>{row.exit_trim_date || ""}</td>
-                    <td>{row.symbol}</td>
-                    <td><span className={`action-pill ${row.action.toLowerCase()}`}>{row.action}</span></td>
-                    <td>{row.source_strategy}</td>
-                    <td>{formatPercent(row.previous_weight)}</td>
-                    <td>{formatPercent(row.target_weight)}</td>
-                    <td className={row.weight_change >= 0 ? "positive" : "negative"}>{formatSignedPercent(row.weight_change)}</td>
-                    <td>{formatPrice(row.price)}</td>
-                    <td>{formatPercent(row.transaction_cost, 3)}</td>
-                    <td>{row.realized_marked_return === null ? "" : formatPercent(row.realized_marked_return)}</td>
-                  </tr>
+
+            {strategyDetail?.description ? <p className="caption">{strategyDetail.description}</p> : null}
+
+            <section className="metric-row four compact">
+              <Metric label="Ending value" value={strategyDetail ? formatCurrency(strategyDetail.summary.ending_value) : "-"} delta="" />
+              <Metric label="Total return" value={strategyDetail ? formatPercent(strategyDetail.summary.total_return) : "-"} delta="" />
+              <Metric label="Max drawdown" value={strategyDetail ? formatPercent(strategyDetail.summary.max_drawdown) : "-"} delta="" />
+              <Metric label="Sharpe-like" value={strategyDetail ? formatNumber(strategyDetail.summary.sharpe_like) : "-"} delta="" />
+            </section>
+
+            <Section title="Latest Demo Weights">
+              <ChartFrame loading={loadingStrategy}>
+                {strategyDetail && strategyDetail.latest_weights.length > 0 ? (
+                  <>
+                    <WeightsChart rows={strategyDetail.latest_weights} />
+                    <WeightsTable rows={strategyDetail.latest_weights} />
+                  </>
+                ) : (
+                  <div className="info">This strategy is currently in cash in the demo path.</div>
+                )}
+              </ChartFrame>
+            </Section>
+
+            <Section title="Daily Returns">
+              <ChartFrame loading={loadingStrategy}>
+                <DailyReturnsChart rows={recentReturns} />
+              </ChartFrame>
+            </Section>
+          </>
+        ) : null}
+
+        {activeTab === "trades" ? (
+          <>
+            <label className="st-select">
+              <span>Strategy</span>
+              <select
+                value={selectedTradeStrategyId}
+                onChange={(event) => setSelectedTradeStrategyId(event.target.value)}
+              >
+                {dashboard?.summary.map((strategy) => (
+                  <option key={strategy.id} value={strategy.id}>
+                    {strategy.name}
+                  </option>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
-      ) : null}
+              </select>
+            </label>
 
-      {activeTab === "policy" ? (
-        <Panel title="Policy" description="Guardrails enforced before any broker submission path can be considered.">
-          <div className="policy-grid">
-            <div className="policy-list">
-              <PolicyItem ok={!policy?.live_trading_enabled} label="Live trading disabled" />
-              <PolicyItem ok={Boolean(policy?.manual_approval_required)} label="Manual approval required" />
-              <PolicyItem ok={Boolean(policy?.long_only)} label="Long-only policy" />
-              <PolicyItem ok={!policy?.allow_margin && !policy?.allow_shorting} label="No margin or shorting" />
-            </div>
-            <dl className="definition-list">
-              <div>
-                <dt>Gross exposure cap</dt>
-                <dd>{policy ? formatPercent(policy.gross_exposure_cap_pct) : "-"}</dd>
-              </div>
-              <div>
-                <dt>Default risk/trade</dt>
-                <dd>{policy ? formatPercent(policy.risk_per_trade_default_pct, 2) : "-"}</dd>
-              </div>
-              <div>
-                <dt>Max risk/trade</dt>
-                <dd>{policy ? formatPercent(policy.risk_per_trade_max_pct, 2) : "-"}</dd>
-              </div>
-            </dl>
-          </div>
-        </Panel>
-      ) : null}
+            <section className="metric-row three compact">
+              <Metric label="Trade rows" value={tradeRows.length.toLocaleString()} delta="" />
+              <Metric label="Rebalance events" value={rebalanceEvents.toLocaleString()} delta="" />
+              <Metric label="Open marks" value={openMarks.toLocaleString()} delta="" />
+            </section>
 
-      <footer className="footer">
-        Demo/backtest returns are not live-trading proof.
-      </footer>
-    </main>
+            <ChartFrame loading={loadingTrades}>
+              {tradeRows.length === 0 ? (
+                <div className="info">No simulated trades were generated for this strategy.</div>
+              ) : (
+                <>
+                  <label className="st-multiselect">
+                    <span>Action</span>
+                    <div>
+                      {actionOptions.map((action) => (
+                        <label key={action}>
+                          <input
+                            type="checkbox"
+                            checked={selectedActions.includes(action)}
+                            onChange={(event) => {
+                              setSelectedActions((current) =>
+                                event.target.checked
+                                  ? [...current, action]
+                                  : current.filter((item) => item !== action)
+                              );
+                            }}
+                          />
+                          <span>{action}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </label>
+                  <TradesTable rows={filteredTrades} />
+                  <button
+                    className="st-button download"
+                    type="button"
+                    onClick={() => downloadTrades(tradeDetail?.summary.name || "strategy", filteredTrades)}
+                  >
+                    <Download size={15} />
+                    Download trades CSV
+                  </button>
+                </>
+              )}
+            </ChartFrame>
+          </>
+        ) : null}
+
+        {activeTab === "universe" ? (
+          <>
+            <Section title="ETF Prices">
+              {etfPriceRows.length > 0 ? (
+                <SeriesLineChart rows={etfPriceRows} names={etfSymbols} valueKind="price" height={390} />
+              ) : (
+                <div className="info">Price data is unavailable for the ETF universe.</div>
+              )}
+            </Section>
+
+            <Section title="Stock Prices">
+              {stockPriceRows.length > 0 ? (
+                <SeriesLineChart rows={stockPriceRows} names={stockSymbols} valueKind="price" height={390} />
+              ) : (
+                <div className="info">Price data is unavailable for the stock universe.</div>
+              )}
+            </Section>
+          </>
+        ) : null}
+
+        {activeTab === "policy" ? (
+          <>
+            <Section title="Policy">
+              <pre className="json-block">{JSON.stringify(policyJson, null, 2)}</pre>
+            </Section>
+            <Section title="Recommendations">
+              <div className="info">No recommendations file found at var/recommendations.json.</div>
+            </Section>
+          </>
+        ) : null}
+
+        <p className="footer">Demo/backtest returns are not live-trading proof.</p>
+      </main>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="st-section">
+      <h2>{title}</h2>
+      {children}
+    </section>
   );
 }
 
 function Metric({ label, value, delta }: { label: string; value: string; delta: string }) {
   return (
-    <div className="metric">
+    <div className="st-metric">
       <span>{label}</span>
       <strong>{value}</strong>
       {delta ? <small>{delta}</small> : null}
@@ -517,28 +545,78 @@ function Metric({ label, value, delta }: { label: string; value: string; delta: 
   );
 }
 
-function Panel({
-  title,
-  description,
-  action,
-  children
+function ChartFrame({ loading, children }: { loading: boolean; children: React.ReactNode }) {
+  if (loading) {
+    return <div className="loading">Running...</div>;
+  }
+  return children;
+}
+
+function SeriesLineChart({
+  rows,
+  names,
+  valueKind,
+  height
 }: {
-  title: string;
-  description?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
+  rows: Record<string, string | number>[];
+  names: string[];
+  valueKind: "currency" | "percent" | "price";
+  height: number;
 }) {
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <div>
-          <h2>{title}</h2>
-          {description ? <p>{description}</p> : null}
-        </div>
-        {action}
-      </div>
-      {children}
-    </section>
+    <div className="chart-box" style={{ height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={rows} margin={{ top: 12, right: 24, left: 6, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+          <XAxis dataKey="date" tickFormatter={compactDate} minTickGap={42} tickLine={false} axisLine={false} />
+          <YAxis tickFormatter={(value) => formatAxis(value, valueKind)} tickLine={false} axisLine={false} width={72} />
+          <Tooltip formatter={(value) => formatTooltip(Number(value), valueKind)} labelFormatter={(label) => compactDate(String(label))} />
+          <Legend wrapperStyle={{ paddingTop: 12 }} />
+          {names.map((name, index) => (
+            <Line
+              key={name}
+              type="monotone"
+              dataKey={name}
+              dot={false}
+              stroke={COLORS[index % COLORS.length]}
+              strokeWidth={2}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function WeightsChart({ rows }: { rows: WeightRow[] }) {
+  return (
+    <div className="chart-box compact-chart">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={rows} margin={{ top: 12, right: 24, left: 6, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+          <XAxis dataKey="symbol" tickLine={false} axisLine={false} />
+          <YAxis tickFormatter={(value) => formatPercent(Number(value), 0)} tickLine={false} axisLine={false} />
+          <Tooltip formatter={(value) => formatPercent(Number(value))} />
+          <Bar dataKey="weight" fill="#ff4b4b" radius={[3, 3, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function DailyReturnsChart({ rows }: { rows: DailyReturnRow[] }) {
+  return (
+    <div className="chart-box" style={{ height: 390 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={rows} margin={{ top: 12, right: 24, left: 6, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+          <XAxis dataKey="date" tickFormatter={compactDate} minTickGap={24} tickLine={false} axisLine={false} />
+          <YAxis tickFormatter={(value) => formatPercent(Number(value), 0)} tickLine={false} axisLine={false} />
+          <Tooltip formatter={(value) => formatPercent(Number(value), 2)} labelFormatter={(label) => compactDate(String(label))} />
+          <Bar dataKey="daily_return" fill="#ff4b4b" radius={[2, 2, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -552,17 +630,18 @@ function StrategySummaryTable({
   onSelect: (strategyId: string) => void;
 }) {
   return (
-    <div className="table-scroll summary-table">
+    <div className="dataframe summary-table">
       <table>
         <thead>
           <tr>
             <th>Strategy</th>
             <th>Sleeve</th>
-            <th>Ending</th>
-            <th>Total</th>
-            <th>Ann.</th>
-            <th>Max DD</th>
-            <th>Sharpe</th>
+            <th>Ending Value</th>
+            <th>Total Return</th>
+            <th>Annualized Return</th>
+            <th>Max Drawdown</th>
+            <th>Volatility</th>
+            <th>Sharpe-like</th>
           </tr>
         </thead>
         <tbody>
@@ -575,9 +654,10 @@ function StrategySummaryTable({
               <td>{row.name}</td>
               <td>{row.sleeve}</td>
               <td>{formatCurrency(row.ending_value)}</td>
-              <td className={row.total_return >= 0 ? "positive" : "negative"}>{formatPercent(row.total_return)}</td>
+              <td>{formatPercent(row.total_return)}</td>
               <td>{formatPercent(row.annualized_return)}</td>
-              <td className="negative">{formatPercent(row.max_drawdown)}</td>
+              <td>{formatPercent(row.max_drawdown)}</td>
+              <td>{formatPercent(row.volatility)}</td>
               <td>{formatNumber(row.sharpe_like)}</td>
             </tr>
           ))}
@@ -587,18 +667,93 @@ function StrategySummaryTable({
   );
 }
 
-function ChartFrame({ loading, children }: { loading: boolean; children: React.ReactNode }) {
-  if (loading) {
-    return <div className="loading">Loading chart</div>;
-  }
-  return children;
-}
-
-function PolicyItem({ ok, label }: { ok: boolean; label: string }) {
+function WeightsTable({ rows }: { rows: WeightRow[] }) {
   return (
-    <div className={ok ? "policy-item ok" : "policy-item warn"}>
-      {ok ? <CheckCircle2 size={18} /> : <ShieldCheck size={18} />}
-      <span>{label}</span>
+    <div className="dataframe weights-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Weight</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.symbol}>
+              <td>{row.symbol}</td>
+              <td>{formatPercent(row.weight)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
+}
+
+function TradesTable({ rows }: { rows: TradeRow[] }) {
+  return (
+    <div className="dataframe trades-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Strategy</th>
+            <th>Source Strategy</th>
+            <th>Sleeve</th>
+            <th>Trade Date</th>
+            <th>Entry Date</th>
+            <th>Exit/Trim Date</th>
+            <th>Symbol</th>
+            <th>Action</th>
+            <th>Previous Weight</th>
+            <th>Target Weight</th>
+            <th>Weight Change</th>
+            <th>Price</th>
+            <th>Transaction Cost</th>
+            <th>Realized/Marked Return</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={`${row.trade_date}-${row.symbol}-${row.action}-${index}`}>
+              <td>{row.strategy}</td>
+              <td>{row.source_strategy}</td>
+              <td>{row.sleeve}</td>
+              <td>{row.trade_date}</td>
+              <td>{row.entry_date || ""}</td>
+              <td>{row.exit_trim_date || ""}</td>
+              <td>{row.symbol}</td>
+              <td>{row.action}</td>
+              <td>{formatPercent(row.previous_weight)}</td>
+              <td>{formatPercent(row.target_weight)}</td>
+              <td>{formatSignedPercent(row.weight_change)}</td>
+              <td>{formatPrice(row.price)}</td>
+              <td>{formatPercent(row.transaction_cost, 3)}</td>
+              <td>{row.realized_marked_return === null ? "" : formatPercent(row.realized_marked_return)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function formatAxis(value: unknown, valueKind: "currency" | "percent" | "price") {
+  const numeric = Number(value);
+  if (valueKind === "percent") {
+    return formatPercent(numeric, 0);
+  }
+  if (valueKind === "currency") {
+    return `$${Math.round(numeric / 1000)}k`;
+  }
+  return `$${Math.round(numeric)}`;
+}
+
+function formatTooltip(value: number, valueKind: "currency" | "percent" | "price") {
+  if (valueKind === "percent") {
+    return formatPercent(value);
+  }
+  if (valueKind === "currency") {
+    return formatCurrency(value);
+  }
+  return formatPrice(value);
 }

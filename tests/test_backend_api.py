@@ -45,6 +45,10 @@ class BackendApiTests(unittest.TestCase):
         self.assertEqual(len(payload["summary"]), 6)
         self.assertIn("ETF Momentum Rotation", payload["equity_curves"])
         self.assertIn("70/30 Combined Policy", payload["drawdowns"])
+        self.assertIn("SPY", payload["prices"])
+        self.assertIn("AAPL", payload["prices"])
+        self.assertIn("SPY", payload["sample_etfs"])
+        self.assertIn("AAPL", payload["sample_stocks"])
 
     def test_strategy_detail_endpoint_returns_trades(self):
         response = self.client.get("/api/strategies/etf-momentum-rotation?use_real_data=false")

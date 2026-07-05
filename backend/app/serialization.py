@@ -16,6 +16,7 @@ from backend.app.schemas import (
     WeightRow,
 )
 from trading_agent.config import Policy
+from trading_agent.demo import SAMPLE_ETFS, SAMPLE_STOCKS
 
 
 def strategy_id(name: str) -> str:
@@ -64,6 +65,9 @@ def serialize_dashboard(demo: Any, initial_capital: float) -> DashboardResponse:
         summary=[serialize_strategy_summary(result) for result in demo.results.values()],
         equity_curves=_serialize_frame_series(demo.equity_curves),
         drawdowns=_serialize_frame_series(demo.drawdowns),
+        prices=_serialize_frame_series(demo.prices),
+        sample_etfs=list(SAMPLE_ETFS),
+        sample_stocks=list(SAMPLE_STOCKS),
     )
 
 

@@ -72,6 +72,9 @@ export interface DashboardResponse {
   summary: StrategySummary[];
   equity_curves: Record<string, TimeSeriesPoint[]>;
   drawdowns: Record<string, TimeSeriesPoint[]>;
+  prices?: Record<string, TimeSeriesPoint[]>;
+  sample_etfs?: string[];
+  sample_stocks?: string[];
 }
 
 export interface DataRefreshResponse {

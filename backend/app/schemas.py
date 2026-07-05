@@ -83,6 +83,9 @@ class DashboardResponse(BaseModel):
     summary: List[StrategySummary]
     equity_curves: Dict[str, List[TimeSeriesPoint]]
     drawdowns: Dict[str, List[TimeSeriesPoint]]
+    prices: Dict[str, List[TimeSeriesPoint]]
+    sample_etfs: List[str]
+    sample_stocks: List[str]
 
 
 class DataRefreshResponse(BaseModel):
