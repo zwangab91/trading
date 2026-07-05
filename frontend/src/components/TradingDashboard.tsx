@@ -46,6 +46,13 @@ import type {
 
 const COLORS = ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed", "#0891b2"];
 const formatChartDate = (label: unknown) => compactDate(String(label));
+const TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "strategy", label: "Strategy" },
+  { id: "trades", label: "Trades" },
+  { id: "policy", label: "Policy" }
+] as const;
+type DashboardTab = (typeof TABS)[number]["id"];
 
 function chartRows(series: Record<string, TimeSeriesPoint[]>, strategyNames: string[]) {
   const byDate = new Map<string, Record<string, string | number>>();
@@ -117,6 +124,7 @@ export function TradingDashboard() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
 
   const loadDashboard = useCallback(async () => {
     setLoadingDashboard(true);
@@ -210,8 +218,12 @@ export function TradingDashboard() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div>
+        <div className="title-group">
+          <span className="eyebrow">Research dashboard</span>
           <h1>Trading Agent</h1>
+          <p className="subtitle">
+            Compare strategy sleeves, inspect drawdowns, and audit simulated rebalance trades.
+          </p>
           <div className="meta-row">
             <span>{dashboard?.is_real_data ? "Real historical data" : "Synthetic validation data"}</span>
             <span>{dashboard?.data_source || "Loading data source"}</span>
@@ -266,223 +278,227 @@ export function TradingDashboard() {
         <Metric label="Policy status" value={policy?.live_trading_enabled ? "Live enabled" : "Live disabled"} delta={policy?.manual_approval_required ? "Manual approval" : ""} />
       </section>
 
-      <section className="grid grid-two">
-        <Panel title="Equity Curve">
-          <ChartFrame loading={loadingDashboard}>
-            <ResponsiveContainer width="100%" height={330}>
-              <LineChart data={equityRows}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="date" tickFormatter={compactDate} minTickGap={42} />
-                <YAxis tickFormatter={(value) => `$${Math.round(Number(value) / 1000)}k`} />
-                <Tooltip formatter={(value) => formatCurrency(Number(value))} labelFormatter={formatChartDate} />
-                <Legend />
-                {strategyNames.map((name, index) => (
-                  <Line key={name} type="monotone" dataKey={name} dot={false} stroke={COLORS[index % COLORS.length]} strokeWidth={2} />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartFrame>
-        </Panel>
+      <nav className="tabs" aria-label="Dashboard sections">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={activeTab === tab.id ? "tab active" : "tab"}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
 
-        <Panel title="Drawdown">
-          <ChartFrame loading={loadingDashboard}>
-            <ResponsiveContainer width="100%" height={330}>
-              <LineChart data={drawdownRows}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="date" tickFormatter={compactDate} minTickGap={42} />
-                <YAxis tickFormatter={(value) => formatPercent(Number(value), 0)} />
-                <Tooltip formatter={(value) => formatPercent(Number(value))} labelFormatter={formatChartDate} />
-                <Legend />
-                {strategyNames.map((name, index) => (
-                  <Line key={name} type="monotone" dataKey={name} dot={false} stroke={COLORS[index % COLORS.length]} strokeWidth={2} />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartFrame>
-        </Panel>
-      </section>
+      {activeTab === "overview" ? (
+        <>
+          <section className="grid grid-two">
+            <Panel title="Equity Curve" description="Portfolio value by strategy over the full demo window.">
+              <ChartFrame loading={loadingDashboard}>
+                <ResponsiveContainer width="100%" height={360}>
+                  <LineChart data={equityRows} margin={{ top: 8, right: 18, left: 4, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                    <XAxis dataKey="date" tickFormatter={compactDate} minTickGap={42} tickLine={false} axisLine={false} />
+                    <YAxis tickFormatter={(value) => `$${Math.round(Number(value) / 1000)}k`} tickLine={false} axisLine={false} width={64} />
+                    <Tooltip formatter={(value) => formatCurrency(Number(value))} labelFormatter={formatChartDate} />
+                    <Legend wrapperStyle={{ paddingTop: 12 }} />
+                    {strategyNames.map((name, index) => (
+                      <Line key={name} type="monotone" dataKey={name} dot={false} stroke={COLORS[index % COLORS.length]} strokeWidth={2.4} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartFrame>
+            </Panel>
 
-      <section className="grid grid-dashboard">
-        <Panel title="Strategy Summary">
-          <div className="table-scroll summary-table">
+            <Panel title="Drawdown" description="Peak-to-trough decline for each strategy path.">
+              <ChartFrame loading={loadingDashboard}>
+                <ResponsiveContainer width="100%" height={360}>
+                  <LineChart data={drawdownRows} margin={{ top: 8, right: 18, left: 4, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                    <XAxis dataKey="date" tickFormatter={compactDate} minTickGap={42} tickLine={false} axisLine={false} />
+                    <YAxis tickFormatter={(value) => formatPercent(Number(value), 0)} tickLine={false} axisLine={false} width={54} />
+                    <Tooltip formatter={(value) => formatPercent(Number(value))} labelFormatter={formatChartDate} />
+                    <Legend wrapperStyle={{ paddingTop: 12 }} />
+                    {strategyNames.map((name, index) => (
+                      <Line key={name} type="monotone" dataKey={name} dot={false} stroke={COLORS[index % COLORS.length]} strokeWidth={2.4} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartFrame>
+            </Panel>
+          </section>
+
+          <Panel title="Strategy Summary" description="Click a row to inspect weights, returns, and trades.">
+            <StrategySummaryTable
+              rows={dashboard?.summary || []}
+              selectedStrategyId={selectedStrategyId}
+              onSelect={(strategyId) => {
+                setSelectedStrategyId(strategyId);
+                setActiveTab("strategy");
+              }}
+            />
+          </Panel>
+        </>
+      ) : null}
+
+      {activeTab === "strategy" ? (
+        <section className="grid grid-two">
+          <Panel title={detail ? detail.summary.name : "Strategy Detail"} description={detail?.description}>
+            {loadingDetail || !detail ? (
+              <div className="loading">Loading strategy</div>
+            ) : (
+              <div className="detail-stack">
+                <div className="detail-metrics">
+                  <Metric label="Ending value" value={formatCurrency(detail.summary.ending_value)} delta="" />
+                  <Metric label="Total return" value={formatPercent(detail.summary.total_return)} delta="" />
+                  <Metric label="Max drawdown" value={formatPercent(detail.summary.max_drawdown)} delta="" />
+                  <Metric label="Sharpe-like" value={formatNumber(detail.summary.sharpe_like)} delta="" />
+                </div>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={detail.latest_weights} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                    <XAxis dataKey="symbol" tickLine={false} axisLine={false} />
+                    <YAxis tickFormatter={(value) => formatPercent(Number(value), 0)} tickLine={false} axisLine={false} />
+                    <Tooltip formatter={(value) => formatPercent(Number(value))} />
+                    <Bar dataKey="weight" fill="#2563eb" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Panel>
+
+          <Panel title="Recent Daily Returns" description="Most recent 126 trading days for the selected strategy.">
+            <ChartFrame loading={loadingDetail}>
+              <ResponsiveContainer width="100%" height={390}>
+                <BarChart data={recentReturns} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                  <XAxis dataKey="date" tickFormatter={compactDate} minTickGap={24} tickLine={false} axisLine={false} />
+                  <YAxis tickFormatter={(value) => formatPercent(Number(value), 0)} tickLine={false} axisLine={false} />
+                  <Tooltip formatter={(value) => formatPercent(Number(value), 2)} labelFormatter={formatChartDate} />
+                  <Bar dataKey="daily_return" fill="#0f766e" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartFrame>
+          </Panel>
+        </section>
+      ) : null}
+
+      {activeTab === "trades" ? (
+        <Panel
+          title="Trades"
+          description="Simulated rebalance rows generated from target weight changes."
+          action={
+            detail ? (
+              <button className="button secondary" type="button" onClick={() => downloadTrades(detail.summary.name, filteredTrades)}>
+                <Download size={16} />
+                Export CSV
+              </button>
+            ) : null
+          }
+        >
+          <div className="trade-toolbar">
+            <label className="select-field">
+              <span>Strategy</span>
+              <select
+                value={selectedStrategyId}
+                onChange={(event) => setSelectedStrategyId(event.target.value)}
+                aria-label="Trade strategy"
+              >
+                {dashboard?.summary.map((strategy) => (
+                  <option key={strategy.id} value={strategy.id}>
+                    {strategy.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="trade-count">{filteredTrades.length} rows</span>
+            <div className="action-filter">
+              {actionOptions.map((action) => (
+                <label key={action}>
+                  <input
+                    type="checkbox"
+                    checked={selectedActions.includes(action)}
+                    onChange={(event) => {
+                      setSelectedActions((current) =>
+                        event.target.checked
+                          ? [...current, action]
+                          : current.filter((item) => item !== action)
+                      );
+                    }}
+                  />
+                  <span>{action}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="table-scroll trades-table">
             <table>
               <thead>
                 <tr>
-                  <th>Strategy</th>
-                  <th>Sleeve</th>
-                  <th>Ending</th>
-                  <th>Total</th>
-                  <th>Ann.</th>
-                  <th>Max DD</th>
-                  <th>Sharpe</th>
+                  <th>Trade date</th>
+                  <th>Entry</th>
+                  <th>Exit/trim</th>
+                  <th>Symbol</th>
+                  <th>Action</th>
+                  <th>Source</th>
+                  <th>Prev.</th>
+                  <th>Target</th>
+                  <th>Change</th>
+                  <th>Price</th>
+                  <th>Cost drag</th>
+                  <th>Return</th>
                 </tr>
               </thead>
               <tbody>
-                {dashboard?.summary.map((row) => (
-                  <tr
-                    key={row.id}
-                    className={row.id === selectedStrategyId ? "selected" : ""}
-                    onClick={() => setSelectedStrategyId(row.id)}
-                  >
-                    <td>{row.name}</td>
-                    <td>{row.sleeve}</td>
-                    <td>{formatCurrency(row.ending_value)}</td>
-                    <td className={row.total_return >= 0 ? "positive" : "negative"}>{formatPercent(row.total_return)}</td>
-                    <td>{formatPercent(row.annualized_return)}</td>
-                    <td className="negative">{formatPercent(row.max_drawdown)}</td>
-                    <td>{formatNumber(row.sharpe_like)}</td>
+                {filteredTrades.map((row, index) => (
+                  <tr key={`${row.trade_date}-${row.symbol}-${row.action}-${index}`}>
+                    <td>{row.trade_date}</td>
+                    <td>{row.entry_date || ""}</td>
+                    <td>{row.exit_trim_date || ""}</td>
+                    <td>{row.symbol}</td>
+                    <td><span className={`action-pill ${row.action.toLowerCase()}`}>{row.action}</span></td>
+                    <td>{row.source_strategy}</td>
+                    <td>{formatPercent(row.previous_weight)}</td>
+                    <td>{formatPercent(row.target_weight)}</td>
+                    <td className={row.weight_change >= 0 ? "positive" : "negative"}>{formatSignedPercent(row.weight_change)}</td>
+                    <td>{formatPrice(row.price)}</td>
+                    <td>{formatPercent(row.transaction_cost, 3)}</td>
+                    <td>{row.realized_marked_return === null ? "" : formatPercent(row.realized_marked_return)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </Panel>
+      ) : null}
 
-        <Panel title="Policy">
-          <div className="policy-list">
-            <PolicyItem ok={!policy?.live_trading_enabled} label="Live trading disabled" />
-            <PolicyItem ok={Boolean(policy?.manual_approval_required)} label="Manual approval required" />
-            <PolicyItem ok={Boolean(policy?.long_only)} label="Long-only policy" />
-            <PolicyItem ok={!policy?.allow_margin && !policy?.allow_shorting} label="No margin or shorting" />
-          </div>
-          <dl className="definition-list">
-            <div>
-              <dt>Gross exposure cap</dt>
-              <dd>{policy ? formatPercent(policy.gross_exposure_cap_pct) : "-"}</dd>
+      {activeTab === "policy" ? (
+        <Panel title="Policy" description="Guardrails enforced before any broker submission path can be considered.">
+          <div className="policy-grid">
+            <div className="policy-list">
+              <PolicyItem ok={!policy?.live_trading_enabled} label="Live trading disabled" />
+              <PolicyItem ok={Boolean(policy?.manual_approval_required)} label="Manual approval required" />
+              <PolicyItem ok={Boolean(policy?.long_only)} label="Long-only policy" />
+              <PolicyItem ok={!policy?.allow_margin && !policy?.allow_shorting} label="No margin or shorting" />
             </div>
-            <div>
-              <dt>Default risk/trade</dt>
-              <dd>{policy ? formatPercent(policy.risk_per_trade_default_pct, 2) : "-"}</dd>
-            </div>
-            <div>
-              <dt>Max risk/trade</dt>
-              <dd>{policy ? formatPercent(policy.risk_per_trade_max_pct, 2) : "-"}</dd>
-            </div>
-          </dl>
-        </Panel>
-      </section>
-
-      <section className="grid grid-two">
-        <Panel title={detail ? detail.summary.name : "Strategy Detail"}>
-          {loadingDetail || !detail ? (
-            <div className="loading">Loading strategy</div>
-          ) : (
-            <div className="detail-stack">
-              <p className="description">{detail.description}</p>
-              <div className="detail-metrics">
-                <Metric label="Ending value" value={formatCurrency(detail.summary.ending_value)} delta="" />
-                <Metric label="Total return" value={formatPercent(detail.summary.total_return)} delta="" />
-                <Metric label="Max drawdown" value={formatPercent(detail.summary.max_drawdown)} delta="" />
-                <Metric label="Sharpe-like" value={formatNumber(detail.summary.sharpe_like)} delta="" />
+            <dl className="definition-list">
+              <div>
+                <dt>Gross exposure cap</dt>
+                <dd>{policy ? formatPercent(policy.gross_exposure_cap_pct) : "-"}</dd>
               </div>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={detail.latest_weights}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="symbol" />
-                  <YAxis tickFormatter={(value) => formatPercent(Number(value), 0)} />
-                  <Tooltip formatter={(value) => formatPercent(Number(value))} />
-                  <Bar dataKey="weight" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </Panel>
-
-        <Panel title="Recent Daily Returns">
-          <ChartFrame loading={loadingDetail}>
-            <ResponsiveContainer width="100%" height={360}>
-              <BarChart data={recentReturns}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="date" tickFormatter={compactDate} minTickGap={24} />
-                <YAxis tickFormatter={(value) => formatPercent(Number(value), 0)} />
-                <Tooltip formatter={(value) => formatPercent(Number(value), 2)} labelFormatter={formatChartDate} />
-                <Bar dataKey="daily_return" fill="#059669" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartFrame>
-        </Panel>
-      </section>
-
-      <Panel
-        title="Trades"
-        action={
-          detail ? (
-            <button className="button secondary" type="button" onClick={() => downloadTrades(detail.summary.name, filteredTrades)}>
-              <Download size={16} />
-              CSV
-            </button>
-          ) : null
-        }
-      >
-        <div className="trade-toolbar">
-          <select
-            value={selectedStrategyId}
-            onChange={(event) => setSelectedStrategyId(event.target.value)}
-          >
-            {dashboard?.summary.map((strategy) => (
-              <option key={strategy.id} value={strategy.id}>
-                {strategy.name}
-              </option>
-            ))}
-          </select>
-          <div className="action-filter">
-            {actionOptions.map((action) => (
-              <label key={action}>
-                <input
-                  type="checkbox"
-                  checked={selectedActions.includes(action)}
-                  onChange={(event) => {
-                    setSelectedActions((current) =>
-                      event.target.checked
-                        ? [...current, action]
-                        : current.filter((item) => item !== action)
-                    );
-                  }}
-                />
-                <span>{action}</span>
-              </label>
-            ))}
+              <div>
+                <dt>Default risk/trade</dt>
+                <dd>{policy ? formatPercent(policy.risk_per_trade_default_pct, 2) : "-"}</dd>
+              </div>
+              <div>
+                <dt>Max risk/trade</dt>
+                <dd>{policy ? formatPercent(policy.risk_per_trade_max_pct, 2) : "-"}</dd>
+              </div>
+            </dl>
           </div>
-        </div>
-        <div className="table-scroll trades-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Trade date</th>
-                <th>Entry</th>
-                <th>Exit/trim</th>
-                <th>Symbol</th>
-                <th>Action</th>
-                <th>Source</th>
-                <th>Prev.</th>
-                <th>Target</th>
-                <th>Change</th>
-                <th>Price</th>
-                <th>Cost drag</th>
-                <th>Return</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTrades.map((row, index) => (
-                <tr key={`${row.trade_date}-${row.symbol}-${row.action}-${index}`}>
-                  <td>{row.trade_date}</td>
-                  <td>{row.entry_date || ""}</td>
-                  <td>{row.exit_trim_date || ""}</td>
-                  <td>{row.symbol}</td>
-                  <td>{row.action}</td>
-                  <td>{row.source_strategy}</td>
-                  <td>{formatPercent(row.previous_weight)}</td>
-                  <td>{formatPercent(row.target_weight)}</td>
-                  <td className={row.weight_change >= 0 ? "positive" : "negative"}>{formatSignedPercent(row.weight_change)}</td>
-                  <td>{formatPrice(row.price)}</td>
-                  <td>{formatPercent(row.transaction_cost, 3)}</td>
-                  <td>{row.realized_marked_return === null ? "" : formatPercent(row.realized_marked_return)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
+        </Panel>
+      ) : null}
 
       <footer className="footer">
         Demo/backtest returns are not live-trading proof.
@@ -503,21 +519,71 @@ function Metric({ label, value, delta }: { label: string; value: string; delta: 
 
 function Panel({
   title,
+  description,
   action,
   children
 }: {
   title: string;
+  description?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className="panel">
       <div className="panel-header">
-        <h2>{title}</h2>
+        <div>
+          <h2>{title}</h2>
+          {description ? <p>{description}</p> : null}
+        </div>
         {action}
       </div>
       {children}
     </section>
+  );
+}
+
+function StrategySummaryTable({
+  rows,
+  selectedStrategyId,
+  onSelect
+}: {
+  rows: StrategySummary[];
+  selectedStrategyId: string;
+  onSelect: (strategyId: string) => void;
+}) {
+  return (
+    <div className="table-scroll summary-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Strategy</th>
+            <th>Sleeve</th>
+            <th>Ending</th>
+            <th>Total</th>
+            <th>Ann.</th>
+            <th>Max DD</th>
+            <th>Sharpe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              key={row.id}
+              className={row.id === selectedStrategyId ? "selected" : ""}
+              onClick={() => onSelect(row.id)}
+            >
+              <td>{row.name}</td>
+              <td>{row.sleeve}</td>
+              <td>{formatCurrency(row.ending_value)}</td>
+              <td className={row.total_return >= 0 ? "positive" : "negative"}>{formatPercent(row.total_return)}</td>
+              <td>{formatPercent(row.annualized_return)}</td>
+              <td className="negative">{formatPercent(row.max_drawdown)}</td>
+              <td>{formatNumber(row.sharpe_like)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
