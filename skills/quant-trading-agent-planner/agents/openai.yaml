@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quant Trading Planner"
+  short_description: "Plan conservative quant trading systems"
+  default_prompt: "Use $quant-trading-agent-planner to interview me and draft a conservative plan for a real-money quant trading agent."

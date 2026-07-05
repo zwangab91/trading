@@ -62,4 +62,9 @@ docs/                   Planning and policy documents
 tests/                  Unit tests
 trading_agent/          Python package
 var/                    Local runtime state, ignored where sensitive
+skills/                 Repo copy of the Codex skills created from this session
 ```
+
+## Codex Skills
+
+The `skills/` directory contains a repo-local copy of the planning and builder skills distilled from this project. The personal installed copies live under `~/.codex/skills/`.

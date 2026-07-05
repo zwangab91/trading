@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quant Trading Builder"
+  short_description: "Build safe Python quant trading scaffolds"
+  default_prompt: "Use $quant-trading-agent-builder to scaffold a Python quant trading agent with risk checks, demo backtests, and a dashboard."
