@@ -83,10 +83,10 @@ This validates the strategy/dashboard pipeline with deterministic fallback data 
 - `recommendations.py`: size long orders from price/stop/risk budget.
 - `storage.py`: audit event store.
 - `backtest.py`: benchmark returns and summary metrics.
-- `demo.py`: run ETF/equity/combined strategy demos over real historical prices.
+- `demo.py`: run ETF/equity/combined strategy demos over real historical prices, including simulated trade-history rows from rebalance weight changes.
 - `data/yahoo.py`: cached `yfinance` adjusted-close downloader.
 - `execution/schwab.py`: guarded order preparation and disabled live submission.
-- `dashboard/app.py`: Streamlit summary table, equity curves, drawdowns, weights, prices, and policy view.
+- `dashboard/app.py`: Streamlit summary table, equity curves, drawdowns, weights, trades tab, prices, and policy view.
 - `cli.py`: `show-policy`, `init-db`, `risk-check-sample`, and `demo-summary`.
 
 ## Example Strategies
@@ -111,4 +111,7 @@ Cover:
 - Risk engine blocks short sale.
 - Schwab adapter refuses submission while live trading is disabled.
 - Demo backtests produce expected strategy rows.
+- Buy-and-hold strategies emit only initial entries and final marks.
+- Rebalanced strategies emit mid-period entries, trims, exits, and final marks.
+- Combined policy trade history scales underlying sleeve rows.
 - Yahoo loader reads cached prices without network.

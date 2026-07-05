@@ -53,8 +53,8 @@ def main() -> None:
     col3.metric("50/50 benchmark", f"${benchmark['Ending Value']:,.0f}", f"{benchmark['Total Return']:.1%}")
     col4.metric("Data mode", "Real" if demo.is_real_data else "Synthetic", "Live trading disabled")
 
-    tab_overview, tab_strategy, tab_universe, tab_policy = st.tabs(
-        ["Overview", "Strategy Detail", "Universe", "Policy"]
+    tab_overview, tab_strategy, tab_trades, tab_universe, tab_policy = st.tabs(
+        ["Overview", "Strategy Detail", "Trades", "Universe", "Policy"]
     )
 
     with tab_overview:
@@ -113,6 +113,59 @@ def main() -> None:
             .rename(columns={"index": "Date"})
         )
         st.bar_chart(recent_returns, x="Date", y="Daily Return")
+
+    with tab_trades:
+        trade_strategy_name = st.selectbox(
+            "Strategy",
+            list(demo.results.keys()),
+            index=5,
+            key="trades_strategy",
+        )
+        trade_history = demo.results[trade_strategy_name].trade_history.copy()
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Trade rows", f"{len(trade_history):,}")
+        col2.metric(
+            "Rebalance events",
+            f"{trade_history['Trade Date'].nunique() if len(trade_history) > 0 else 0:,}",
+        )
+        col3.metric(
+            "Open marks",
+            f"{int((trade_history['Action'] == 'Mark').sum()) if len(trade_history) > 0 else 0:,}",
+        )
+
+        if len(trade_history) == 0:
+            st.info("No simulated trades were generated for this strategy.")
+        else:
+            actions = sorted(trade_history["Action"].dropna().unique())
+            selected_actions = st.multiselect(
+                "Action",
+                actions,
+                default=actions,
+                key="trades_action_filter",
+            )
+            filtered_trades = trade_history[trade_history["Action"].isin(selected_actions)]
+            st.dataframe(
+                filtered_trades.style.format(
+                    {
+                        "Previous Weight": "{:.1%}",
+                        "Target Weight": "{:.1%}",
+                        "Weight Change": "{:+.1%}",
+                        "Price": "${:,.2f}",
+                        "Transaction Cost": "{:.3%}",
+                        "Realized/Marked Return": "{:.1%}",
+                    },
+                    na_rep="",
+                ),
+                width="stretch",
+                hide_index=True,
+            )
+            st.download_button(
+                "Download trades CSV",
+                data=filtered_trades.to_csv(index=False),
+                file_name=f"{trade_strategy_name.lower().replace(' ', '_').replace('/', '_')}_trades.csv",
+                mime="text/csv",
+            )
 
     with tab_universe:
         st.subheader("ETF Prices")

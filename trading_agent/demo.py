@@ -10,6 +10,22 @@ from trading_agent.data.yahoo import load_yahoo_close_prices
 SAMPLE_ETFS = ("SPY", "QQQ", "IWM", "TLT", "IEF", "GLD")
 SAMPLE_STOCKS = ("AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "JPM", "XOM", "UNH", "COST")
 SAMPLE_SYMBOLS = SAMPLE_ETFS + SAMPLE_STOCKS
+TRADE_HISTORY_COLUMNS = (
+    "Strategy",
+    "Source Strategy",
+    "Sleeve",
+    "Trade Date",
+    "Entry Date",
+    "Exit/Trim Date",
+    "Symbol",
+    "Action",
+    "Previous Weight",
+    "Target Weight",
+    "Weight Change",
+    "Price",
+    "Transaction Cost",
+    "Realized/Marked Return",
+)
 
 
 @dataclass(frozen=True)
@@ -21,6 +37,7 @@ class StrategyResult:
     equity_curve: object
     drawdown: object
     latest_weights: object
+    trade_history: object
     summary: BacktestSummary
     ending_value: float
 
@@ -32,6 +49,7 @@ class DemoBacktestResult:
     summary_table: object
     equity_curves: object
     drawdowns: object
+    trade_history: object
     data_source: str
     is_real_data: bool
     data_error: str
@@ -130,6 +148,162 @@ def _normalize_weights(pd, columns, raw_weights: Mapping[str, float]):
     return weights
 
 
+def _empty_trade_history(pd):
+    return pd.DataFrame(columns=list(TRADE_HISTORY_COLUMNS))
+
+
+def _return_since_entry(price: float, entry_price: float) -> float:
+    if entry_price <= 0.0:
+        return float("nan")
+    return price / entry_price - 1.0
+
+
+def _build_trade_history(
+    prices,
+    weights,
+    strategy_name: str,
+    sleeve: str,
+    transaction_cost_bps: float,
+    min_weight_change: float = 0.0001,
+):
+    pd, _ = _require_pandas_numpy()
+    if weights.empty:
+        return _empty_trade_history(pd)
+
+    rows = []
+    current_entries = {}
+    previous_weights = _empty_weights(pd, prices.columns)
+
+    for trade_date, target_weights in weights.iterrows():
+        changes = target_weights - previous_weights
+        changed_symbols = changes[changes.abs() > min_weight_change].sort_index()
+        for symbol, weight_change in changed_symbols.items():
+            previous_weight = float(previous_weights.loc[symbol])
+            target_weight = float(target_weights.loc[symbol])
+            price = float(prices.loc[trade_date, symbol])
+            transaction_cost = abs(float(weight_change)) * transaction_cost_bps / 10000.0
+            entry_date = pd.NaT
+            exit_trim_date = pd.NaT
+            realized_or_marked_return = float("nan")
+
+            if float(weight_change) > 0.0:
+                action = "Entry" if previous_weight <= min_weight_change else "Increase"
+                entry_date = trade_date
+                existing = current_entries.get(symbol)
+                if existing is None or previous_weight <= min_weight_change:
+                    current_entries[symbol] = {
+                        "entry_date": trade_date,
+                        "entry_price": price,
+                        "weight": target_weight,
+                    }
+                else:
+                    entry_price = float(existing["entry_price"])
+                    new_weight = max(target_weight, min_weight_change)
+                    average_entry_price = (
+                        entry_price * previous_weight + price * float(weight_change)
+                    ) / new_weight
+                    current_entries[symbol] = {
+                        "entry_date": existing["entry_date"],
+                        "entry_price": average_entry_price,
+                        "weight": target_weight,
+                    }
+            else:
+                action = "Exit" if target_weight <= min_weight_change else "Trim"
+                exit_trim_date = trade_date
+                existing = current_entries.get(symbol)
+                if existing is not None:
+                    entry_date = existing["entry_date"]
+                    realized_or_marked_return = _return_since_entry(
+                        price, float(existing["entry_price"])
+                    )
+                if target_weight <= min_weight_change:
+                    current_entries.pop(symbol, None)
+                elif existing is not None:
+                    current_entries[symbol] = {
+                        "entry_date": existing["entry_date"],
+                        "entry_price": existing["entry_price"],
+                        "weight": target_weight,
+                    }
+
+            rows.append(
+                {
+                    "Strategy": strategy_name,
+                    "Source Strategy": strategy_name,
+                    "Sleeve": sleeve,
+                    "Trade Date": trade_date,
+                    "Entry Date": entry_date,
+                    "Exit/Trim Date": exit_trim_date,
+                    "Symbol": symbol,
+                    "Action": action,
+                    "Previous Weight": previous_weight,
+                    "Target Weight": target_weight,
+                    "Weight Change": float(weight_change),
+                    "Price": price,
+                    "Transaction Cost": transaction_cost,
+                    "Realized/Marked Return": realized_or_marked_return,
+                }
+            )
+        previous_weights = target_weights.copy()
+
+    final_date = weights.index[-1]
+    final_weights = weights.iloc[-1]
+    for symbol in sorted(current_entries):
+        current_weight = float(final_weights.loc[symbol])
+        if current_weight <= min_weight_change:
+            continue
+        entry = current_entries[symbol]
+        mark_price = float(prices.loc[final_date, symbol])
+        rows.append(
+            {
+                "Strategy": strategy_name,
+                "Source Strategy": strategy_name,
+                "Sleeve": sleeve,
+                "Trade Date": final_date,
+                "Entry Date": entry["entry_date"],
+                "Exit/Trim Date": pd.NaT,
+                "Symbol": symbol,
+                "Action": "Mark",
+                "Previous Weight": current_weight,
+                "Target Weight": current_weight,
+                "Weight Change": 0.0,
+                "Price": mark_price,
+                "Transaction Cost": 0.0,
+                "Realized/Marked Return": _return_since_entry(
+                    mark_price, float(entry["entry_price"])
+                ),
+            }
+        )
+
+    if not rows:
+        return _empty_trade_history(pd)
+    return pd.DataFrame(rows, columns=list(TRADE_HISTORY_COLUMNS))
+
+
+def _scale_trade_history(pd, trade_history, strategy_name: str, sleeve: str, source_weight: float):
+    if trade_history.empty:
+        return _empty_trade_history(pd)
+    scaled = trade_history.copy()
+    scaled["Source Strategy"] = scaled["Strategy"]
+    scaled["Strategy"] = strategy_name
+    scaled["Sleeve"] = sleeve
+    for column in ("Previous Weight", "Target Weight", "Weight Change", "Transaction Cost"):
+        scaled[column] = scaled[column] * source_weight
+    return scaled[list(TRADE_HISTORY_COLUMNS)]
+
+
+def _combine_trade_histories(pd, strategy_name: str, sleeve: str, weighted_results):
+    histories = [
+        _scale_trade_history(pd, result.trade_history, strategy_name, sleeve, source_weight)
+        for source_weight, result in weighted_results
+        if not result.trade_history.empty
+    ]
+    if not histories:
+        return _empty_trade_history(pd)
+    return pd.concat(histories, ignore_index=True).sort_values(
+        ["Trade Date", "Source Strategy", "Symbol", "Action"]
+    )
+
+
 def _run_rebalanced_strategy(
     prices,
     selector,
@@ -226,6 +400,7 @@ def _make_result(
     description: str,
     daily_returns,
     weights,
+    trade_history,
     initial_capital: float,
 ) -> StrategyResult:
     equity_curve = initial_capital * (1.0 + daily_returns).cumprod()
@@ -240,6 +415,7 @@ def _make_result(
         equity_curve=equity_curve,
         drawdown=drawdown,
         latest_weights=latest_weights,
+        trade_history=trade_history,
         summary=summary,
         ending_value=float(equity_curve.iloc[-1]),
     )
@@ -276,22 +452,38 @@ def run_demo_backtests(
     benchmark_weights = pd.DataFrame(0.0, index=prices.index, columns=prices.columns)
     benchmark_weights["SPY"] = 0.5
     benchmark_weights["QQQ"] = 0.5
+    benchmark_trades = _build_trade_history(
+        prices,
+        benchmark_weights,
+        "50/50 SPY/QQQ",
+        "Benchmark",
+        transaction_cost_bps=0.0,
+    )
     results["50/50 SPY/QQQ"] = _make_result(
         "50/50 SPY/QQQ",
         "Benchmark",
         "Primary benchmark selected for policy review.",
         benchmark_daily,
         benchmark_weights,
+        benchmark_trades,
         initial_capital,
     )
 
     etf_buy_hold_daily, etf_buy_hold_weights = _buy_hold_returns(prices, SAMPLE_ETFS)
+    etf_buy_hold_trades = _build_trade_history(
+        prices,
+        etf_buy_hold_weights,
+        "ETF Equal Weight",
+        "Core ETF",
+        transaction_cost_bps=2.0,
+    )
     results["ETF Equal Weight"] = _make_result(
         "ETF Equal Weight",
         "Core ETF",
         "Equal-weight buy-and-hold basket across sample ETFs.",
         etf_buy_hold_daily,
         etf_buy_hold_weights,
+        etf_buy_hold_trades,
         initial_capital,
     )
 
@@ -302,14 +494,23 @@ def run_demo_backtests(
         rebalance_interval=21,
         transaction_cost_bps=5.0,
     )
-    results["ETF Momentum Rotation"] = _make_result(
+    etf_momentum_trades = _build_trade_history(
+        prices,
+        etf_momentum_weights,
+        "ETF Momentum Rotation",
+        "Core ETF",
+        transaction_cost_bps=5.0,
+    )
+    etf_momentum_result = _make_result(
         "ETF Momentum Rotation",
         "Core ETF",
         "Monthly top-3 ETF momentum rotation with a 200-day trend filter and defensive fallback.",
         etf_momentum_daily,
         etf_momentum_weights,
+        etf_momentum_trades,
         initial_capital,
     )
+    results["ETF Momentum Rotation"] = etf_momentum_result
 
     defensive_daily, defensive_weights = _run_rebalanced_strategy(
         prices,
@@ -318,12 +519,20 @@ def run_demo_backtests(
         rebalance_interval=21,
         transaction_cost_bps=4.0,
     )
+    defensive_trades = _build_trade_history(
+        prices,
+        defensive_weights,
+        "ETF Defensive Trend",
+        "Core ETF",
+        transaction_cost_bps=4.0,
+    )
     results["ETF Defensive Trend"] = _make_result(
         "ETF Defensive Trend",
         "Core ETF",
         "Risk-on/risk-off ETF allocation driven by SPY's 200-day trend.",
         defensive_daily,
         defensive_weights,
+        defensive_trades,
         initial_capital,
     )
 
@@ -334,23 +543,39 @@ def run_demo_backtests(
         rebalance_interval=21,
         transaction_cost_bps=8.0,
     )
-    results["Equity Momentum"] = _make_result(
+    equity_momentum_trades = _build_trade_history(
+        prices,
+        equity_momentum_weights,
+        "Equity Momentum",
+        "Equity Satellite",
+        transaction_cost_bps=8.0,
+    )
+    equity_momentum_result = _make_result(
         "Equity Momentum",
         "Equity Satellite",
         "Monthly top-5 volatility-adjusted momentum strategy across sample stocks.",
         equity_momentum_daily,
         equity_momentum_weights,
+        equity_momentum_trades,
         initial_capital,
     )
+    results["Equity Momentum"] = equity_momentum_result
 
     combined_daily = 0.70 * etf_momentum_daily + 0.30 * equity_momentum_daily
     combined_weights = 0.70 * etf_momentum_weights + 0.30 * equity_momentum_weights
+    combined_trades = _combine_trade_histories(
+        pd,
+        "70/30 Combined Policy",
+        "Combined",
+        ((0.70, etf_momentum_result), (0.30, equity_momentum_result)),
+    )
     results["70/30 Combined Policy"] = _make_result(
         "70/30 Combined Policy",
         "Combined",
         "Policy-style blend of ETF momentum and equity momentum sleeves.",
         combined_daily,
         combined_weights,
+        combined_trades,
         initial_capital,
     )
 
@@ -372,6 +597,14 @@ def run_demo_backtests(
     summary_table = pd.DataFrame(summary_rows).sort_values("Ending Value", ascending=False)
     equity_curves = pd.DataFrame({name: result.equity_curve for name, result in results.items()})
     drawdowns = pd.DataFrame({name: result.drawdown for name, result in results.items()})
+    trade_histories = [
+        result.trade_history for result in results.values() if not result.trade_history.empty
+    ]
+    trade_history = (
+        pd.concat(trade_histories, ignore_index=True)
+        if trade_histories
+        else _empty_trade_history(pd)
+    )
 
     return DemoBacktestResult(
         prices=prices,
@@ -379,6 +612,7 @@ def run_demo_backtests(
         summary_table=summary_table,
         equity_curves=equity_curves,
         drawdowns=drawdowns,
+        trade_history=trade_history,
         data_source=data_source,
         is_real_data=is_real_data,
         data_error=data_error,

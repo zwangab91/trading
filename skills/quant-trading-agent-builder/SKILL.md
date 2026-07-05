@@ -1,6 +1,6 @@
 ---
 name: quant-trading-agent-builder
-description: Build safety-first Python scaffolds for low/mid-frequency quantitative trading agents. Use when implementing a trading-agent repo with policy config, risk engine, strategy/backtest skeletons, real historical market-data demos, Streamlit dashboard, manual approval workflow, audit logging, broker adapter guardrails, tests, or CLI commands.
+description: Build safety-first Python scaffolds for low/mid-frequency quantitative trading agents. Use when implementing a trading-agent repo with policy config, risk engine, strategy/backtest skeletons, trade-history backtest rows, real historical market-data demos, Streamlit dashboard, manual approval workflow, audit logging, broker adapter guardrails, tests, or CLI commands.
 ---
 
 # Quant Trading Agent Builder
@@ -20,7 +20,7 @@ If the user has not already approved a plan, stop and use a planning workflow fi
 5. Add broker integration as a guarded adapter stub first; do not implement live network submission in the first scaffold.
 6. Add real historical data for demos and cache it locally.
 7. Keep synthetic data only as an explicit fallback or offline UI test path.
-8. Add dashboard and CLI views that show strategy return, benchmark comparison, drawdown, weights, and policy status.
+8. Add dashboard and CLI views that show strategy return, benchmark comparison, drawdown, weights, simulated trade history, and policy status.
 9. Run compile, unit tests, CLI smoke tests, server checks, and dashboard smoke tests.
 
 Use `references/session-build-outline.md` for the concrete file/module pattern from the trading-agent session.
@@ -54,6 +54,7 @@ Backtest outputs should include:
 - Equity curve.
 - Drawdown curve.
 - Latest weights.
+- Simulated trade history with strategy, source strategy when blended, sleeve, trade date, entry date, exit/trim date, symbol, action, previous weight, target weight, weight change, price, transaction cost, and realized/marked return.
 
 Always state that demo/backtest returns are not live-trading proof.
 
