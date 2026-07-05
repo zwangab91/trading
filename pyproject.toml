@@ -21,7 +21,17 @@ dashboard = [
   "streamlit>=1.50",
   "yfinance>=1.2,<2",
 ]
+backend = [
+  "fastapi>=0.115",
+  "httpx>=0.28",
+  "numpy>=1.24",
+  "pandas>=1.5",
+  "uvicorn[standard]>=0.32",
+  "yfinance>=1.2,<2",
+]
 test = [
+  "fastapi>=0.115",
+  "httpx>=0.28",
   "pytest>=7",
 ]
 
@@ -29,4 +39,4 @@ test = [
 trading-agent = "trading_agent.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["trading_agent*"]
+include = ["trading_agent*", "backend*"]

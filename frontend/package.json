@@ -1,0 +1,29 @@
+{
+  "name": "trading-agent-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lucide-react": "^1.23.0",
+    "next": "16.2.10",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "recharts": "^3.9.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.2",
+    "eslint-config-next": "16.2.10",
+    "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "postcss": "^8.5.16"
+  }
+}

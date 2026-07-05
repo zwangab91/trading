@@ -26,7 +26,8 @@ def main() -> None:
         step=1000,
     )
     use_real_data = st.sidebar.checkbox("Use real historical data", value=True)
-    refresh_data = st.sidebar.checkbox("Refresh cached data", value=False)
+    refresh_data = st.sidebar.button("Refresh Yahoo data", disabled=not use_real_data)
+    st.sidebar.caption("Yahoo cache: var/market_data/yahoo_close_prices.csv")
     demo = run_demo_backtests(
         initial_capital=float(initial_capital),
         use_real_data=use_real_data,
