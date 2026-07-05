@@ -40,7 +40,7 @@ Recommend a staged system:
 
 Separate strategy sleeves when risk profiles differ. For the session-derived plan, use a lower-complexity ETF sleeve as the first live candidate and keep individual equities in research/paper mode until proven.
 
-For product-style dashboards, prefer a Python trading engine exposed through FastAPI plus a Next.js frontend. Keep Streamlit only as a quick local research UI unless the user explicitly wants Streamlit as the deployment surface.
+For deployable dashboards, prefer a Python trading engine exposed through FastAPI plus a Next.js frontend. Keep Streamlit only as a quick local research UI unless the user explicitly wants Streamlit as the deployment surface. If the Streamlit dashboard is already readable and accepted, plan to copy its sidebar controls, metrics, tab structure, dataframes, charts, and policy/trade views into Next.js rather than redesigning the information architecture from scratch.
 
 ## Earnings Events
 

@@ -75,7 +75,7 @@ The current scaffold includes:
 - Optional Streamlit dashboard scaffold.
 - Demo strategy dashboard with real historical ETF and stock strategy returns.
 - FastAPI backend endpoints for policy, dashboard summaries, strategy details, trades, and explicit Yahoo data refresh.
-- Next.js dashboard frontend for a product-style web app without Streamlit chrome.
+- Next.js dashboard frontend for deployment, intentionally matching the Streamlit dashboard's readable sidebar, tabs, metrics, charts, tables, trades, Universe, and Policy views.
 
 ## Safety Defaults
 

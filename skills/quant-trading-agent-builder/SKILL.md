@@ -1,6 +1,6 @@
 ---
 name: quant-trading-agent-builder
-description: Build safety-first Python scaffolds for low/mid-frequency quantitative trading agents. Use when implementing a trading-agent repo with policy config, risk engine, strategy/backtest skeletons, trade-history backtest rows, FastAPI backend endpoints, Next.js dashboard frontend, real historical market-data demos, Streamlit legacy dashboard, manual approval workflow, audit logging, broker adapter guardrails, tests, or CLI commands.
+description: Build safety-first Python scaffolds for low/mid-frequency quantitative trading agents. Use when implementing a trading-agent repo with policy config, risk engine, strategy/backtest skeletons, trade-history backtest rows, FastAPI backend endpoints, Next.js dashboard frontend, Streamlit-matched dashboard UX, universe price charts, real historical market-data demos, Streamlit legacy dashboard, manual approval workflow, audit logging, broker adapter guardrails, tests, or CLI commands.
 ---
 
 # Quant Trading Agent Builder
@@ -20,8 +20,8 @@ If the user has not already approved a plan, stop and use a planning workflow fi
 5. Add broker integration as a guarded adapter stub first; do not implement live network submission in the first scaffold.
 6. Add real historical data for demos and cache it locally.
 7. Keep synthetic data only as an explicit fallback or offline UI test path.
-8. Add FastAPI endpoints and a Next.js dashboard that show strategy return, benchmark comparison, drawdown, weights, simulated trade history, and policy status.
-9. Keep the Streamlit dashboard optional or legacy if present; do not make it the primary deployment surface for product-style dashboards.
+8. Add FastAPI endpoints and a Next.js dashboard that show strategy return, benchmark comparison, drawdown, weights, simulated trade history, universe prices, and policy status.
+9. Keep the Streamlit dashboard optional or legacy if present; if its UX has been accepted, mirror its information architecture and labels in Next.js instead of inventing a separate dashboard hierarchy.
 10. Run compile, unit tests, CLI smoke tests, backend checks, frontend type/build checks, server checks, and dashboard smoke tests.
 
 Use `references/session-build-outline.md` for the concrete file/module pattern from the trading-agent session.
@@ -32,8 +32,8 @@ For reproducing the pushed GitHub project from scratch, use the steps in `refere
 Prefer this split for a proper deployable dashboard:
 
 - `trading_agent/`: Python trading engine, policy, risk, data, strategies, backtests, and trade-history generation.
-- `backend/`: FastAPI app exposing policy, dashboard summary, strategy detail, trade history, and explicit Yahoo refresh endpoints.
-- `frontend/`: Next.js + TypeScript dashboard consuming `NEXT_PUBLIC_API_URL`.
+- `backend/`: FastAPI app exposing policy, dashboard summary, strategy detail, trade history, universe price series, and explicit Yahoo refresh endpoints.
+- `frontend/`: Next.js + TypeScript dashboard consuming `NEXT_PUBLIC_API_URL`; preserve Streamlit-like sidebar controls, metric rows, tabs, dataframes, chart sections, policy JSON, and trades CSV export when matching the session dashboard.
 - CORS: Allow both local frontend origins (`http://localhost:3000`, `http://127.0.0.1:3000`) by default and use `ALLOWED_ORIGINS` for deployment.
 - Refresh: Make Yahoo refresh an explicit POST/button action, not a persistent checkbox or automatic render side effect.
 
@@ -65,6 +65,7 @@ Backtest outputs should include:
 - Equity curve.
 - Drawdown curve.
 - Latest weights.
+- Universe price series and sample ETF/stock symbols for the dashboard Universe tab.
 - Simulated trade history with strategy, source strategy when blended, sleeve, trade date, entry date, exit/trim date, symbol, action, previous weight, target weight, weight change, price, transaction cost, and realized/marked return.
 
 Always state that demo/backtest returns are not live-trading proof.
