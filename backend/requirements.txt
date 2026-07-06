@@ -1,0 +1,6 @@
+fastapi>=0.115
+httpx>=0.28
+numpy>=1.24
+pandas>=1.5
+uvicorn[standard]>=0.32
+yfinance>=1.2,<2

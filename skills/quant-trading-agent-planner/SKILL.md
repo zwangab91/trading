@@ -1,6 +1,6 @@
 ---
 name: quant-trading-agent-planner
-description: Interview and plan conservative low/mid-frequency quantitative trading agents for real-money accounts. Use when the user asks to design, scope, review, or prepare a trading agent, strategy portfolio, broker/data plan, risk policy, backtesting standard, paper-trading gate, dashboard, alerts, kill switch, or live-deployment controls before implementation.
+description: Interview and plan conservative low/mid-frequency quantitative trading agents for real-money accounts. Use when the user asks to design, scope, review, or prepare a trading agent, strategy portfolio, broker/data plan, risk policy, backtesting standard, paper-trading gate, dashboard, FastAPI/Next.js deployment architecture, alerts, kill switch, or live-deployment controls before implementation.
 ---
 
 # Quant Trading Agent Planner
@@ -23,6 +23,7 @@ Ask concise questions covering:
 - Strategy preferences: ETF rotation, trend, mean reversion, factors, stat arb, PEAD, ML, news/sentiment.
 - Risk limits: drawdown, daily/weekly/monthly loss, risk per trade, exposure caps.
 - Reporting, alerts, dashboard, and human controls.
+- Dashboard architecture: local research UI versus proper web app, API/backend hosting, frontend hosting, CORS, refresh controls, and deployment environment variables.
 - Backtest, out-of-sample, walk-forward, paper-trading, and live promotion standards.
 - Goal definition: benchmark beating, Sharpe/Sortino, drawdown control, learning, or absolute return.
 
@@ -38,6 +39,8 @@ Recommend a staged system:
 4. Gradual scale-up only after evidence and operational checks.
 
 Separate strategy sleeves when risk profiles differ. For the session-derived plan, use a lower-complexity ETF sleeve as the first live candidate and keep individual equities in research/paper mode until proven.
+
+For deployable dashboards, prefer a Python trading engine exposed through FastAPI plus a Next.js frontend. Keep Streamlit only as a quick local research UI unless the user explicitly wants Streamlit as the deployment surface. If the Streamlit dashboard is already readable and accepted, plan to copy its sidebar controls, metrics, tab structure, dataframes, charts, and policy/trade views into Next.js rather than redesigning the information architecture from scratch.
 
 ## Earnings Events
 
@@ -59,4 +62,3 @@ Produce a concrete plan with:
 - Data, backtesting, execution, dashboard, alerting, audit, and deployment architecture.
 - Promotion gate before live capital.
 - Clear next step requiring approval before implementation.
-

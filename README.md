@@ -24,7 +24,7 @@ python3 -m unittest discover
 Optional research dependencies can be installed later:
 
 ```bash
-python3 -m pip install -e ".[research,test,dashboard]"
+python3 -m pip install -e ".[research,test,dashboard,backend]"
 ```
 
 Run the demo dashboard:
@@ -34,6 +34,55 @@ streamlit run dashboard/app.py
 ```
 
 The dashboard uses real historical adjusted-close data from Yahoo Finance via `yfinance` by default, cached under `var/market_data/`. Synthetic sample data remains available as a fallback for offline UI validation.
+
+Run the API backend for a future web frontend:
+
+```bash
+uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+```
+
+Useful local endpoints:
+
+- `GET /health`
+- `GET /api/policy`
+- `GET /api/dashboard?use_real_data=false`
+- `GET /api/strategies`
+- `GET /api/strategies/{strategy_id}`
+- `GET /api/strategies/{strategy_id}/trades`
+- `POST /api/data/refresh-yahoo`
+
+Run the Next.js frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend defaults to `http://127.0.0.1:8000` for API calls. For deployment, set `NEXT_PUBLIC_API_URL` to the hosted backend URL. The backend CORS allowlist is controlled by `ALLOWED_ORIGINS`, which should include the deployed frontend origin.
+
+## Deployment
+
+This repo follows a Vercel + Render split:
+
+- Frontend: deploy `frontend/` as a Vercel Next.js project.
+- Backend: deploy the root repo on Render using `render.yaml`.
+
+Render backend settings:
+
+- Blueprint file: `render.yaml`
+- Build command: `pip install -e ".[backend]"`
+- Start command: `uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT`
+- Health check path: `/health`
+- Environment variable: set `ALLOWED_ORIGINS` to the deployed Vercel frontend URL.
+
+Vercel frontend settings:
+
+- Root directory: `frontend`
+- Framework preset: Next.js
+- Environment variable: set `NEXT_PUBLIC_API_URL` to the deployed Render backend URL.
+
+After the backend is deployed, set the GitHub repository variable `RENDER_BACKEND_URL` to the Render backend URL. The scheduled workflow in `.github/workflows/keep-render-alive.yml` pings `/health` every 14 minutes to reduce Render free-tier cold starts.
 
 ## Current Scope
 
@@ -48,6 +97,8 @@ The current scaffold includes:
 - SQLite audit logging.
 - Optional Streamlit dashboard scaffold.
 - Demo strategy dashboard with real historical ETF and stock strategy returns.
+- FastAPI backend endpoints for policy, dashboard summaries, strategy details, trades, and explicit Yahoo data refresh.
+- Next.js dashboard frontend for deployment, intentionally matching the Streamlit dashboard's readable sidebar, tabs, metrics, charts, tables, trades, Universe, and Policy views.
 
 ## Safety Defaults
 
@@ -57,8 +108,10 @@ Live order submission is disabled in code and configuration. The system is desig
 
 ```text
 config/                 V1 policy configuration
+backend/                FastAPI backend for web frontend/API clients
 dashboard/              Optional dashboard app
 docs/                   Planning and policy documents
+frontend/               Next.js dashboard frontend
 tests/                  Unit tests
 trading_agent/          Python package
 var/                    Local runtime state, ignored where sensitive

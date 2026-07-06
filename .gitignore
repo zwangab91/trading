@@ -11,3 +11,9 @@ var/*.log
 var/market_data/
 var/recommendations.json
 .env
+node_modules/
+.next/
+frontend/.env.local
+frontend/.next/
+frontend/.vercel/
+frontend/tsconfig.tsbuildinfo
