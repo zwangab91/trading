@@ -1,0 +1,18 @@
+name: Keep Render backend alive
+
+on:
+  schedule:
+    - cron: "*/14 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check backend URL
+        if: ${{ vars.RENDER_BACKEND_URL == '' }}
+        run: echo "Set the RENDER_BACKEND_URL repository variable after deploying the backend."
+
+      - name: Ping backend health endpoint
+        if: ${{ vars.RENDER_BACKEND_URL != '' }}
+        run: curl -sf "${{ vars.RENDER_BACKEND_URL }}/health"

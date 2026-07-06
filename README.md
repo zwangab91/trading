@@ -61,6 +61,29 @@ npm run dev
 
 The frontend defaults to `http://127.0.0.1:8000` for API calls. For deployment, set `NEXT_PUBLIC_API_URL` to the hosted backend URL. The backend CORS allowlist is controlled by `ALLOWED_ORIGINS`, which should include the deployed frontend origin.
 
+## Deployment
+
+This repo follows a Vercel + Render split:
+
+- Frontend: deploy `frontend/` as a Vercel Next.js project.
+- Backend: deploy the root repo on Render using `render.yaml`.
+
+Render backend settings:
+
+- Blueprint file: `render.yaml`
+- Build command: `pip install -e ".[backend]"`
+- Start command: `uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT`
+- Health check path: `/health`
+- Environment variable: set `ALLOWED_ORIGINS` to the deployed Vercel frontend URL.
+
+Vercel frontend settings:
+
+- Root directory: `frontend`
+- Framework preset: Next.js
+- Environment variable: set `NEXT_PUBLIC_API_URL` to the deployed Render backend URL.
+
+After the backend is deployed, set the GitHub repository variable `RENDER_BACKEND_URL` to the Render backend URL. The scheduled workflow in `.github/workflows/keep-render-alive.yml` pings `/health` every 14 minutes to reduce Render free-tier cold starts.
+
 ## Current Scope
 
 The current scaffold includes:
