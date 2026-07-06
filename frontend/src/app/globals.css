@@ -423,6 +423,18 @@ tbody tr:last-child td {
   border-radius: 0.45rem;
 }
 
+.status-banner {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  margin: 0.85rem 0 1.3rem;
+}
+
+.status-banner strong,
+.status-banner span {
+  display: block;
+}
+
 .json-block {
   margin: 0;
   padding: 1rem;
