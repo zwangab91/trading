@@ -162,7 +162,7 @@ export function TradingDashboard() {
   }, [loadDashboard]);
 
   useEffect(() => {
-    if (!selectedStrategyId) {
+    if (!dashboard || !selectedStrategyId || !hasStrategy(dashboard.summary, selectedStrategyId)) {
       return;
     }
     setLoadingStrategy(true);
@@ -173,10 +173,10 @@ export function TradingDashboard() {
         setError(err instanceof Error ? err.message : "Unable to load strategy.");
       })
       .finally(() => setLoadingStrategy(false));
-  }, [initialCapital, selectedStrategyId, useRealData]);
+  }, [dashboard, initialCapital, selectedStrategyId, useRealData]);
 
   useEffect(() => {
-    if (!selectedTradeStrategyId) {
+    if (!dashboard || !selectedTradeStrategyId || !hasStrategy(dashboard.summary, selectedTradeStrategyId)) {
       return;
     }
     setLoadingTrades(true);
@@ -190,7 +190,7 @@ export function TradingDashboard() {
         setError(err instanceof Error ? err.message : "Unable to load trades.");
       })
       .finally(() => setLoadingTrades(false));
-  }, [initialCapital, selectedTradeStrategyId, useRealData]);
+  }, [dashboard, initialCapital, selectedTradeStrategyId, useRealData]);
 
   const strategyNames = useMemo(
     () => dashboard?.summary.map((row) => row.name) || [],
@@ -310,7 +310,15 @@ export function TradingDashboard() {
       <main className="main">
         <h1>Trading Agent</h1>
 
-        {dashboard?.is_real_data ? (
+        {!dashboard ? (
+          <div className="info status-banner">
+            <RefreshCcw size={18} />
+            <div>
+              <strong>Loading dashboard data.</strong>
+              <span>Real historical data can take about a minute on the first hosted request.</span>
+            </div>
+          </div>
+        ) : dashboard.is_real_data ? (
           <p className="caption">Using real historical adjusted-close data: {dashboard.data_source}</p>
         ) : (
           <div className="warning">
@@ -322,6 +330,16 @@ export function TradingDashboard() {
             </div>
           </div>
         )}
+
+        {refreshing ? (
+          <div className="info status-banner">
+            <RefreshCcw size={18} />
+            <div>
+              <strong>Refreshing Yahoo data.</strong>
+              <span>The current dashboard remains visible until the refresh completes.</span>
+            </div>
+          </div>
+        ) : null}
 
         {error ? (
           <div className="warning error">
@@ -337,7 +355,11 @@ export function TradingDashboard() {
           <Metric label="Best demo strategy" value={best?.name || "-"} delta={best ? formatPercent(best.total_return) : ""} />
           <Metric label="Combined policy" value={combined ? formatCurrency(combined.ending_value) : "-"} delta={combined ? formatPercent(combined.total_return) : ""} />
           <Metric label="50/50 benchmark" value={benchmark ? formatCurrency(benchmark.ending_value) : "-"} delta={benchmark ? formatPercent(benchmark.total_return) : ""} />
-          <Metric label="Data mode" value={dashboard?.is_real_data ? "Real" : "Synthetic"} delta="Live trading disabled" />
+          <Metric
+            label="Data mode"
+            value={!dashboard ? "Loading" : dashboard.is_real_data ? "Real" : "Synthetic"}
+            delta={!dashboard ? "Fetching data" : "Live trading disabled"}
+          />
         </section>
 
         <nav className="st-tabs" aria-label="Dashboard sections">
@@ -356,14 +378,18 @@ export function TradingDashboard() {
         {activeTab === "overview" ? (
           <>
             <Section title="Demo Backtest Summary">
-              <StrategySummaryTable
-                rows={dashboard?.summary || []}
-                selectedStrategyId={selectedStrategyId}
-                onSelect={(strategyId) => {
-                  setSelectedStrategyId(strategyId);
-                  setActiveTab("strategy");
-                }}
-              />
+              {loadingDashboard && !dashboard ? (
+                <div className="loading">Running...</div>
+              ) : (
+                <StrategySummaryTable
+                  rows={dashboard?.summary || []}
+                  selectedStrategyId={selectedStrategyId}
+                  onSelect={(strategyId) => {
+                    setSelectedStrategyId(strategyId);
+                    setActiveTab("strategy");
+                  }}
+                />
+              )}
             </Section>
 
             <Section title="Equity Curve">
