@@ -21,6 +21,8 @@ class BacktestSummary:
     max_drawdown: float
     volatility: float
     sharpe_like: float
+    total_turnover: float = 0.0
+    total_cost_drag: float = 0.0
 
 
 def benchmark_returns(close_prices, weights: Dict[str, float]):
@@ -30,7 +32,71 @@ def benchmark_returns(close_prices, weights: Dict[str, float]):
     return returns.mul(weight_series, axis=1).sum(axis=1)
 
 
-def summarize_daily_returns(daily_returns, risk_free_rate: float = 0.0) -> BacktestSummary:
+def _validate_bps(name: str, value: float) -> float:
+    value = float(value)
+    if not value >= 0.0:  # also rejects NaN
+        raise ValueError(f"{name} must be a non-negative number of basis points")
+    return value
+
+
+def _align_target_weights(pd, close_prices, target_weights):
+    missing = [column for column in target_weights.columns if column not in close_prices.columns]
+    if missing:
+        raise ValueError(f"target_weights columns missing from close_prices: {missing}")
+    # Weights given only on rebalance days are held until the next rebalance.
+    aligned = target_weights.reindex(close_prices.index).ffill().fillna(0.0)
+    return aligned.astype(float)
+
+
+def portfolio_turnover(close_prices, target_weights):
+    """Sum of absolute target-weight changes per day, indexed like close_prices.
+
+    The first day counts the move from all cash into the initial weights.
+    """
+    pd = _require_pandas()
+    weights = _align_target_weights(pd, close_prices, target_weights)
+    return weights.diff().fillna(weights).abs().sum(axis=1)
+
+
+def transaction_costs(
+    close_prices,
+    target_weights,
+    cost_bps: float = 0.0,
+    slippage_bps: float = 0.0,
+):
+    """Daily cost drag, as a fraction of equity, charged on each day's turnover."""
+    rate = (_validate_bps("cost_bps", cost_bps) + _validate_bps("slippage_bps", slippage_bps)) / 10_000
+    return portfolio_turnover(close_prices, target_weights) * rate
+
+
+def portfolio_returns(
+    close_prices,
+    target_weights,
+    cost_bps: float = 0.0,
+    slippage_bps: float = 0.0,
+):
+    """Net daily returns of a portfolio rebalanced to target weights at each close.
+
+    Weights set at the close of day t earn the day t+1 return. Costs are
+    charged as (cost_bps + slippage_bps) / 10,000 times the turnover of the
+    rebalance, deducted from the return of the following day.
+    """
+    pd = _require_pandas()
+    weights = _align_target_weights(pd, close_prices, target_weights)
+    costs = transaction_costs(close_prices, target_weights, cost_bps, slippage_bps)
+    asset_returns = close_prices[list(weights.columns)].pct_change()
+    gross = asset_returns.mul(weights.shift(1), axis=1).sum(axis=1)
+    net = gross - costs.shift(1)
+    return net.iloc[1:]
+
+
+def summarize_daily_returns(
+    daily_returns,
+    risk_free_rate: float = 0.0,
+    *,
+    turnover=None,
+    costs=None,
+) -> BacktestSummary:
     pd = _require_pandas()
     if daily_returns.empty:
         raise ValueError("daily_returns cannot be empty")
@@ -56,5 +122,7 @@ def summarize_daily_returns(daily_returns, risk_free_rate: float = 0.0) -> Backt
         max_drawdown=max_drawdown,
         volatility=volatility,
         sharpe_like=sharpe_like,
+        total_turnover=0.0 if turnover is None else float(turnover.sum()),
+        total_cost_drag=0.0 if costs is None else float(costs.sum()),
     )
 
