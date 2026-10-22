@@ -10,6 +10,9 @@ cd "$CLAUDE_PROJECT_DIR"
 
 # Python package with all optional extras (backend, dashboard, research, test)
 python3 -m pip install --quiet -e ".[research,test,dashboard,backend]"
+# Fail loudly if the data stack is missing; without yfinance the demo backtest
+# would otherwise fall back to synthetic prices.
+python3 -c "import pandas, numpy, yfinance, fastapi"
 
 # Next.js frontend. npm ci installs exactly what the lockfile pins and never
 # rewrites it; skip it when node_modules is already newer than the lockfile.
