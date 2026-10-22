@@ -20,11 +20,12 @@ def load_close_prices(path: Path, symbols: Optional[Iterable[str]] = None):
     Expected columns: date, symbol, close.
     """
     pd = _require_pandas()
-    frame = pd.read_csv(path, parse_dates=["date"])
+    frame = pd.read_csv(path)
     required = {"date", "symbol", "close"}
     missing = required - set(frame.columns)
     if missing:
         raise ValueError(f"Missing required columns: {sorted(missing)}")
+    frame["date"] = pd.to_datetime(frame["date"])
     frame["symbol"] = frame["symbol"].str.upper()
     if symbols is not None:
         allowed = {symbol.upper() for symbol in symbols}

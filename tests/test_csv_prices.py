@@ -106,11 +106,6 @@ class LoadClosePricesTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"\['close', 'symbol'\]"):
             load_close_prices(path)
 
-    # Bug: read_csv(parse_dates=["date"]) raises its own ValueError ("Missing
-    # column provided to 'parse_dates'") before the required-column check runs,
-    # so a file without a date column never gets the documented
-    # "Missing required columns" error.
-    @unittest.expectedFailure
     def test_missing_date_column_reports_required_columns(self):
         path = self._write("day,symbol,close\n2026-07-06,SPY,500.0\n")
 
