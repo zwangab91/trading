@@ -21,7 +21,7 @@ async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
       ...options,
       headers
     });
-  } catch (error) {
+  } catch {
     throw new Error("Unable to reach the trading API.");
   }
 
