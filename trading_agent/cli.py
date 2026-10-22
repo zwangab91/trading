@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import date, datetime
 from pathlib import Path
 
@@ -94,10 +95,23 @@ def risk_check_sample(policy_path: Path) -> int:
 
 
 def demo_summary(use_real_data: bool = True, refresh_data: bool = False) -> int:
-    demo = run_demo_backtests(use_real_data=use_real_data, refresh_data=refresh_data)
+    # An explicit refresh asks for real prices, so never quietly substitute synthetic ones.
+    try:
+        demo = run_demo_backtests(
+            use_real_data=use_real_data,
+            refresh_data=refresh_data,
+            allow_synthetic_fallback=not refresh_data,
+        )
+    except Exception as exc:
+        print(f"Error: could not refresh real market data: {exc}", file=sys.stderr)
+        return 1
     print(f"Data source: {demo.data_source}")
     if demo.data_error:
-        print(f"Data warning: {demo.data_error}")
+        print(
+            "WARNING: real market data unavailable; results below use SYNTHETIC prices. "
+            f"Reason: {demo.data_error}",
+            file=sys.stderr,
+        )
     display = demo.summary_table.copy()
     for column in ["Total Return", "Annualized Return", "Max Drawdown", "Volatility"]:
         display[column] = display[column].map(lambda value: f"{value:.1%}")
