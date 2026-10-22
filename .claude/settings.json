@@ -1,4 +1,9 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(gh api -X PUT repos/zwangab91/trading/pulls/*/merge*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
