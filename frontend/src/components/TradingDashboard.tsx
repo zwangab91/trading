@@ -218,7 +218,7 @@ export function TradingDashboard() {
     () => strategyDetail?.daily_returns.slice(-126) || [],
     [strategyDetail]
   );
-  const tradeRows = tradeDetail?.trade_history || [];
+  const tradeRows = useMemo(() => tradeDetail?.trade_history || [], [tradeDetail]);
   const filteredTrades = useMemo(
     () => tradeRows.filter((row) => selectedActions.includes(row.action)),
     [selectedActions, tradeRows]
